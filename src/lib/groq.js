@@ -5,11 +5,11 @@ import { ESQ_CONCEPTOS, ESQ_EVALUACION, ESQ_TIPO } from './esquemas.js';
 // Tareas de estudio (conceptos, evaluación, pruebas). La conexión con las IAs y el respaldo automático están en ai.js.
 export { AiError };
 
-const SYS_CONCEPTOS = `Eres un ayudante de estudio. Del texto que te doy, extrae los CONCEPTOS importantes que un estudiante debe saber explicar (definiciones, instituciones, principios, procesos). Responde SOLO JSON: {"conceptos":[{"nombre":"...","referencia":"..."}]}.
-Reglas: máximo 12 conceptos por texto; "nombre" corto (2 a 6 palabras); "referencia" = lo que dice el texto sobre ese concepto, fiel y completo, 2 a 6 frases, sin inventar nada. Si el texto no tiene conceptos, devuelve {"conceptos":[]}. Español.`;
+const sysConceptos = (max) => `Eres un ayudante de estudio. Del texto que te doy, extrae los CONCEPTOS importantes que un estudiante debe saber explicar (definiciones, instituciones, principios, procesos). Responde SOLO JSON: {"conceptos":[{"nombre":"...","referencia":"..."}]}.
+Reglas: máximo ${max} conceptos por texto (elige solo los MÁS importantes, no repitas ni incluyas detalles menores); "nombre" corto (2 a 6 palabras); "referencia" = lo que dice el texto sobre ese concepto, fiel y completo, 2 a 6 frases, sin inventar nada. Si el texto no tiene conceptos, devuelve {"conceptos":[]}. Español.`;
 
-export async function conceptosDeTexto(texto, opts) {
-  const out = await chat([{ role: 'system', content: SYS_CONCEPTOS }, { role: 'user', content: texto }], { ...opts, esquema: ESQ_CONCEPTOS });
+export async function conceptosDeTexto(texto, opts, max = 12) {
+  const out = await chat([{ role: 'system', content: sysConceptos(max) }, { role: 'user', content: texto }], { ...opts, esquema: ESQ_CONCEPTOS });
   const lista = extraerJson(out)?.conceptos;
   if (!Array.isArray(lista)) return [];
   return lista

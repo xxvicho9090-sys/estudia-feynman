@@ -2,7 +2,7 @@ import { textoDePdf, trocear } from './pdf.js';
 import { conceptosDeTexto } from './groq.js';
 import { hayIA } from './ai.js';
 import { conceptosPorTitulos } from './heuristic.js';
-import { nuevoId, unirConceptos } from './concepts.js';
+import { nuevoId, unirConceptos, limitarConceptos, maxPorTrozo, repartirTrozos } from './concepts.js';
 
 // Archivo PDF → { nombre, conceptos, aviso }. onProgress(texto, fraccion).
 export async function procesarPdf(file, onProgress) {
@@ -15,11 +15,12 @@ export async function procesarPdf(file, onProgress) {
   let conceptos = [];
   let aviso = '';
   if (hayIA()) {
-    const trozos = trocear(texto);
+    const trozos = repartirTrozos(trocear(texto));
+    const porTrozo = maxPorTrozo(trozos.length);
     for (let i = 0; i < trozos.length; i++) {
       onProgress?.(`La IA busca conceptos (${i + 1} de ${trozos.length})…`, 0.3 + ((i + 1) / trozos.length) * 0.7);
       try {
-        conceptos.push(...(await conceptosDeTexto(trozos[i])));
+        conceptos.push(...(await conceptosDeTexto(trozos[i], undefined, porTrozo)));
       } catch (e) {
         if (e.code === 'badkey' || e.code === 'limit' || e.code === 'offline') { aviso = e.message; conceptos = []; break; }
         console.warn('trozo omitido', e);
@@ -32,7 +33,7 @@ export async function procesarPdf(file, onProgress) {
     conceptos = conceptosPorTitulos(texto);
     if (conceptos.length && !aviso) aviso = 'La IA no encontró conceptos; separé por títulos. Revisa la lista.';
   }
-  conceptos = unirConceptos(conceptos).map((c) => ({ id: nuevoId(), nombre: c.nombre, referencia: c.referencia, nota: null, notaFecha: null }));
+  conceptos = limitarConceptos(unirConceptos(conceptos)).map((c) => ({ id: nuevoId(), nombre: c.nombre, referencia: c.referencia, nota: null, notaFecha: null }));
   if (!conceptos.length && !aviso) aviso = 'No encontré conceptos en este PDF. Puedes agregarlos a mano.';
   return { nombre: file.name.replace(/\.pdf$/i, ''), conceptos, aviso };
 }

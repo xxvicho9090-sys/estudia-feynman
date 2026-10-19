@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Stop } from '../icons.jsx';
 import { empezarDictado, pararDictado, soportado } from '../lib/voice.js';
-import { puntosDe, NOMBRES, INSTRUCCION, ROMANO, PUNTOS, SECCIONES, seccionDe, FILAS_CASO } from '../lib/quiz.js';
+import { puntosDe, NOMBRES, INSTRUCCION, ROMANO, PUNTOS, SECCIONES, seccionDe, FILAS_CASO, esLargo } from '../lib/quiz.js';
 import { formatoNota } from '../lib/grade.js';
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
@@ -40,7 +40,7 @@ export default function Hoja({ prueba, paginas, indice, modo, onResp, resumen })
               <span>{INSTRUCCION[seccion]} <em>({PUNTOS[seccion]} {PUNTOS[seccion] === 1 ? 'punto' : 'puntos'} cada una)</em></span>
             </div>
           )}
-          {p.caso && pag.preguntas[k - 1]?.p.caso?.id !== p.caso.id && <CasoBox caso={p.caso} continuacion={p.casoOrden > 0} />}
+          {p.caso && pag.preguntas[k - 1]?.p.caso?.id !== p.caso.id && <CasoBox caso={p.caso} continuacion={p.casoOrden > 0} compacto={esLargo(p.caso) && p.casoOrden > 0} />}
           <Pregunta p={p} n={n} modo={modo} respuesta={prueba.respuestas?.[p.id]} evaluacion={prueba.evaluaciones?.[p.id]} onResp={(v) => onResp?.(p.id, v)} />
         </section>
       ))}
@@ -166,11 +166,13 @@ function Pauta({ p }) {
 }
 
 // Recuadro con el relato de un caso práctico (se repite en cada hoja donde haya preguntas de ese caso).
-export function CasoBox({ caso, continuacion }) {
+export function CasoBox({ caso, continuacion, compacto }) {
   return (
     <aside className="caso" aria-label={`Caso ${caso.num}`}>
       <div className="caso-t">Caso {caso.num}: {caso.titulo}{continuacion && <em> (continuación)</em>}</div>
-      <p>{caso.hechos}</p>
+      {compacto
+        ? <><p>{caso.hechos.slice(0, 220).trimEnd()}…</p><details className="caso-det"><summary>Releer el caso completo</summary><p>{caso.hechos}</p></details></>
+        : <p>{caso.hechos}</p>}
     </aside>
   );
 }

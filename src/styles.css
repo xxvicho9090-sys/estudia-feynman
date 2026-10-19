@@ -254,3 +254,5 @@ code{background:var(--bg);padding:1px 6px;border-radius:6px;font-size:12px;word-
 .caso-t{font:800 13px 'Plus Jakarta Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px}
 .caso-t em{font-weight:600;text-transform:none;letter-spacing:0;color:#6b665f}
 .caso p{margin:0;font-size:clamp(15px,2.3vw,17px);line-height:1.6;white-space:pre-wrap}
+.caso-det{margin-top:8px}.caso-det summary{cursor:pointer;font:700 13px 'Plus Jakarta Sans',sans-serif;color:var(--acc-d)}
+.caso-det p{margin-top:8px}

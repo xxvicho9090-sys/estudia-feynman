@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Back, Chevron } from '../icons.jsx';
 import Hoja, { Pregunta, CasoBox } from './Hoja.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
-import { paginar, calcularPrueba, puntosDe, NOMBRES, SECCIONES, seccionDe } from '../lib/quiz.js';
+import { paginar, calcularPrueba, puntosDe, NOMBRES, SECCIONES, seccionDe, esLargo } from '../lib/quiz.js';
 import { formatoNota, mensajeNota } from '../lib/grade.js';
 
 const pts = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
@@ -56,7 +56,7 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
           {errores.map(({ p, n, r: pr }) => (
             <article key={p.id} className="hoja err-card" aria-label={`Pregunta ${n}`}>
               <div className="err-tipo">{NOMBRES[seccionDe(p)]} · pregunta {n} · {pts(pr.puntos)} de {pr.max} {pr.max === 1 ? 'punto' : 'puntos'}</div>
-              {p.caso && <CasoBox caso={p.caso} />}
+              {p.caso && <CasoBox caso={p.caso} compacto={esLargo(p.caso)} />}
               <Pregunta p={p} n={n} modo="corregida" respuesta={prueba.respuestas?.[p.id]} evaluacion={prueba.evaluaciones?.[p.id]} />
             </article>
           ))}

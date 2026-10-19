@@ -1,5 +1,5 @@
 import { generarPreguntasDeTipo, corregirDesarrollo } from './groq.js';
-import { armarMaterial, normalizarPreguntas, normalizarCasos, aplanarCasos, conceptosCubiertos, enunciadosPrevios, similares, TIPOS, NOMBRES, totalPlan, preguntasPorCaso, calcularPrueba } from './quiz.js';
+import { armarMaterial, normalizarPreguntas, normalizarCasos, aplanarCasos, conceptosCubiertos, enunciadosPrevios, similares, TIPOS, NOMBRES, totalPlan, preguntasPorCaso, extensionDe, EXTENSIONES, calcularPrueba } from './quiz.js';
 import { nuevoId } from './concepts.js';
 
 const FATALES = ['badkey', 'nokey', 'limit', 'offline'];
@@ -18,7 +18,7 @@ export async function crearPrueba({ docs, origen, plan, previas = [], evitarRepe
     const tipo = pasos[i];
     onProgress?.(`Creando ${NOMBRES[tipo].toLowerCase()} (${i + 1} de ${pasos.length})…`, i / pasos.length);
     if (tipo === 'caso') {
-      const casos = await crearCasos(plan, material, evitar, signal, avisos);
+      const casos = await crearCasos(plan, material, evitar, signal, avisos, (texto) => onProgress?.(texto, i / pasos.length));
       preguntas.push(...aplanarCasos(casos, { nuevoId }));
       continue;
     }
@@ -76,24 +76,30 @@ export async function corregirPrueba(prueba, onProgress) {
   return { prueba: { ...sig, estado: r.pendientes ? 'por corregir' : 'corregida', resultado: r.pendientes ? null : r, entregada: prueba.entregada || Date.now() }, error };
 }
 
-// Casos prácticos ficticios: se piden n casos de m preguntas cada uno; se descartan los repetidos y se reintenta una vez si faltan.
-async function crearCasos(plan, material, evitar, signal, avisos) {
+// Casos prácticos ficticios. Los largos se piden de a pocos por consulta (dos planas = de a uno) para que la IA no se corte a la mitad;
+// se descartan los repetidos y se reintenta si faltan.
+async function crearCasos(plan, material, evitar, signal, avisos, onTexto) {
   const porCaso = preguntasPorCaso(plan);
+  const extension = extensionDe(plan);
+  const porLlamada = EXTENSIONES[extension].porLlamada;
   const huella = (c) => `${c.titulo} ${c.hechos.slice(0, 220)}`;
-  let casos = [];
-  for (let intento = 0; intento < 2 && casos.length < plan.casos; intento++) {
-    const faltan = plan.casos - casos.length;
+  const casos = [];
+  const maxIntentos = Math.ceil(plan.casos / porLlamada) + 1;
+  let fallos = 0;
+  for (let intento = 0; intento < maxIntentos && casos.length < plan.casos; intento++) {
+    const pedir = Math.min(porLlamada, plan.casos - casos.length);
+    onTexto?.(`Creando casos prácticos (${Math.min(casos.length + 1, plan.casos)} de ${plan.casos})…`);
     try {
-      const crudo = await generarPreguntasDeTipo('caso', intento ? faltan + 1 : faltan, material.texto, { signal, evitar, porCaso });
+      const crudo = await generarPreguntasDeTipo('caso', pedir, material.texto, { signal, evitar: [...evitar, ...casos.map((c) => `CASO ya usado: ${c.titulo}`)], porCaso, extension });
       for (const c of normalizarCasos(crudo, { nuevoId })) {
-        if (casos.some((x) => similares(huella(c), huella(x)))) continue;
+        if (casos.length >= plan.casos || casos.some((x) => similares(huella(c), huella(x)))) continue;
         casos.push({ ...c, preguntas: c.preguntas.slice(0, porCaso) });
       }
     } catch (e) {
       if (e?.name === 'AbortError' || FATALES.includes(e?.code)) throw e;
-      if (intento) avisos.push('No pude crear todos los casos prácticos.');
+      fallos += 1;
     }
   }
-  if (casos.length < plan.casos && !avisos.length) avisos.push(`De los casos prácticos salieron ${casos.length} de ${plan.casos} pedidos.`);
+  if (casos.length < plan.casos) avisos.push(fallos && !casos.length ? 'No pude crear los casos prácticos.' : `De los casos prácticos salieron ${casos.length} de ${plan.casos} pedidos.`);
   return casos.slice(0, plan.casos);
 }

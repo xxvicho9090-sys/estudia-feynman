@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Trash } from '../icons.jsx';
 import { hayIA } from '../lib/ai.js';
-import { armarMaterial, cobertura, mismoOrigen, presetPlan, planValido, totalPlan, NOMBRES, TIPOS, MAX_PREGUNTAS, MAX_CASOS, POR_CASO } from '../lib/quiz.js';
+import { armarMaterial, cobertura, mismoOrigen, presetPlan, planValido, totalPlan, NOMBRES, TIPOS, MAX_PREGUNTAS, MAX_CASOS, POR_CASO, EXTENSIONES } from '../lib/quiz.js';
 import { formatoNota } from '../lib/grade.js';
 
 const PRESETS = [['alternativas', 'Alternativas'], ['vf', 'Verdadero o falso'], ['desarrollo', 'Desarrollo'], ['caso', 'Casos prácticos'], ['mixto', 'Mixto']];
@@ -35,7 +35,7 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
   // Qué parte de este material ya practicaste con pruebas anteriores.
   const cob = useMemo(() => cobertura(docsOrigen, pruebas.filter((x) => mismoOrigen(x.origen, { clave: origen, nombre }))), [docsOrigen, pruebas, origen, nombre]);
   const cambiar = (tipo, v) => { setPreset('custom'); setPlan({ ...plan, [tipo]: v }); };
-  const elegirPreset = (p) => { setPreset(p); setPlan(presetPlan(p, Math.max(5, Math.min(n || 10, MAX_PREGUNTAS)))); };
+  const elegirPreset = (p) => { setPreset(p); setPlan({ ...presetPlan(p, Math.max(5, Math.min(n || 10, MAX_PREGUNTAS))), ...(plan.extension ? { extension: plan.extension } : {}) }); };
   const puedeCrear = planValido(plan) && mat.conceptos > 0 && hayIA();
 
   return (
@@ -64,6 +64,15 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
           <Stepper etiqueta={NOMBRES.caso} valor={plan.casos || 0} max={MAX_CASOS} onChange={(v) => cambiar('casos', v)} />
           {plan.casos > 0 && <Stepper etiqueta="Preguntas por caso" valor={plan.porCaso || POR_CASO.defecto} max={POR_CASO.max} min={POR_CASO.min} onChange={(v) => cambiar('porCaso', Math.max(POR_CASO.min, v))} />}
         </div>
+        {plan.casos > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <label className="l" htmlFor="ext">Extensión de cada caso</label>
+            <select id="ext" className="txt" value={plan.extension || 'breve'} onChange={(e) => setPlan({ ...plan, extension: e.target.value })}>
+              {Object.entries(EXTENSIONES).map(([k, v]) => <option key={k} value={k}>{v.nombre} · {v.palabras} palabras</option>)}
+            </select>
+            {(plan.extension === 'plana' || plan.extension === 'dos') && <div className="sub" style={{ marginTop: 6, lineHeight: 1.5 }}>Los casos largos tardan más en crearse (se piden de a {EXTENSIONES[plan.extension].porLlamada === 1 ? 'uno' : 'dos'}) y salen mejor con Groq, Gemini o Mistral; las IAs locales los acortan.</div>}
+          </div>
+        )}
         <div className="sub" style={{ marginTop: 10 }}>{n} {n === 1 ? 'pregunta' : 'preguntas'} en total{n > MAX_PREGUNTAS ? ` (máximo ${MAX_PREGUNTAS})` : ''}. Desarrollo y cada pregunta de caso valen 3 puntos; las demás, 1.</div>
 
         {cob.cubiertos > 0 && (

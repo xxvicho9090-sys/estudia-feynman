@@ -113,8 +113,8 @@ test('crearPrueba con casos: pide casos a la IA, los aplana y los deja al final'
     if (u.endsWith('/models')) return new Response(JSON.stringify({ data: [] }));
     const sys = llamadas.at(-1).body.messages[0].content;
     let body;
-    if (sys.includes('CASOS PRÁCTICOS')) {
-      assert.match(sys, /EXACTAMENTE 2 CASOS/); assert.match(sys, /EXACTAMENTE 3 preguntas/);
+    if (sys.includes('PRÁCTICO')) {
+      assert.match(sys, /EXACTAMENTE 2 CASOS PRÁCTICOS/); assert.match(sys, /EXACTAMENTE 3 preguntas/);
       body = { casos: [casoIA('A', 3), casoIA('B', 3)] };
     } else body = { preguntas: [{ enunciado: '¿Cuál es la definición correcta del concepto en la materia?', opciones: ['a1', 'b1', 'c1', 'd1'], correcta: 0 }] };
     return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(body) } }] }));

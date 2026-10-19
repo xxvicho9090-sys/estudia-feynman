@@ -8,6 +8,16 @@ export const MAX_PREGUNTAS = 25;
 export const MAX_CASOS = 5;
 export const POR_CASO = { min: 1, max: 6, defecto: 3 };
 
+// Extensión del relato de cada caso práctico. Por defecto "breve" (la opción "plana"/"dos" es para quien la pida).
+export const EXTENSIONES = {
+  breve: { nombre: 'Breve (media plana)', palabras: '120 a 220', porLlamada: 5 },
+  plana: { nombre: 'Una plana', palabras: '450 a 600', porLlamada: 2 },
+  dos: { nombre: 'Dos planas', palabras: '900 a 1.100', porLlamada: 1 },
+};
+export const extensionDe = (plan) => (EXTENSIONES[plan?.extension] ? plan.extension : 'breve');
+// Un relato largo no se repite entero en cada hoja: en las siguientes se muestra resumido y se puede releer.
+export const esLargo = (caso) => caso.hechos.length > 1800;
+
 // Secciones de la hoja: las preguntas de un caso práctico son de desarrollo, pero van en su propia parte.
 export const SECCIONES = ['alternativas', 'vf', 'desarrollo', 'caso'];
 export const seccionDe = (p) => (p.caso ? 'caso' : p.tipo);
@@ -20,7 +30,8 @@ export const planValido = (plan) => {
   const ok = TIPOS.every((t) => Number.isInteger(plan[t] || 0) && (plan[t] || 0) >= 0);
   const casos = Number.isInteger(plan.casos || 0) && (plan.casos || 0) >= 0 && (plan.casos || 0) <= MAX_CASOS;
   const por = !plan.casos || (Number.isInteger(preguntasPorCaso(plan)) && preguntasPorCaso(plan) >= POR_CASO.min && preguntasPorCaso(plan) <= POR_CASO.max);
-  return n >= 1 && n <= MAX_PREGUNTAS && ok && casos && por;
+  const ext = !plan.casos || plan.extension === undefined || !!EXTENSIONES[plan.extension];
+  return n >= 1 && n <= MAX_PREGUNTAS && ok && casos && por && ext;
 };
 
 // Presets: una sola modalidad o mixto.
@@ -199,7 +210,7 @@ export function paginar(preguntas) {
   let casosEnPagina = new Set();
   preguntas.forEach((p, i) => {
     const sec = seccionDe(p);
-    const cajaCaso = (pg) => (p.caso && !pg.has(p.caso.id) ? pesoRelato(p.caso.hechos) : 0); // el relato del caso se repite en cada hoja donde haya preguntas suyas
+    const cajaCaso = (pg) => (p.caso && !pg.has(p.caso.id) ? (esLargo(p.caso) && p.casoOrden > 0 ? 1.0 : pesoRelato(p.caso.hechos)) : 0); // el relato del caso se repite en cada hoja donde haya preguntas suyas
     let w = pesoDe(p) + (vistos.has(sec) ? 0 : 0.35) + cajaCaso(casosEnPagina);
     const cap = paginas.length === 0 ? CAPACIDAD_PRIMERA : CAPACIDAD;
     if (actual.preguntas.length && uso + w > cap) { paginas.push(actual); actual = { preguntas: [] }; uso = 0; casosEnPagina = new Set(); w = pesoDe(p) + (vistos.has(sec) ? 0 : 0.35) + cajaCaso(casosEnPagina); }

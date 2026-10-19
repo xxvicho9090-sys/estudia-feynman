@@ -35,6 +35,13 @@ export async function evaluarExplicacion(referencia, explicacion, opts) {
 const REGLAS = `Eres profesor de Derecho en Chile y preparas pruebas para estudiantes de pregrado. Redacta con precisión jurídica y en español.
 REGLAS GENERALES: usa SOLO la información del MATERIAL (no inventes artículos, plazos, cifras ni doctrina que no aparezca); cada pregunta evalúa un concepto distinto cuando sea posible; enunciados claros, sin ambigüedad ni trampas de redacción; incluye en "concepto" el nombre del concepto del material al que se refiere; "explicacion" justifica la respuesta correcta según el material en 1-3 frases.`;
 
+// Cómo debe ser el relato de un caso según la extensión pedida.
+const RELATO = {
+  breve: 'un relato de 120 a 220 palabras con personas y empresas de nombres inventados, fechas, montos y circunstancias concretas.',
+  plana: 'un relato extenso de 450 a 600 palabras (una plana completa) con personas y empresas de nombres inventados, hechos en orden cronológico, fechas, montos, el contenido relevante de contratos o documentos, comunicaciones entre las partes y detalles que se presten a distintas interpretaciones.',
+  dos: 'un relato muy extenso de 900 a 1.100 palabras (dos planas), como un caso complejo de prueba final: varias partes y terceros con nombres inventados, antecedentes, cronología detallada, cláusulas citadas textualmente, correos o cartas, pagos parciales, y hechos que se presten a discusión, mezclando datos relevantes con otros de relleno que obliguen a distinguir lo importante. Escríbelo completo, sin resumir.',
+};
+
 const SYS_TIPO = {
   alternativas: (n) => `${REGLAS}
 Crea EXACTAMENTE ${n} preguntas de ALTERNATIVAS (selección única). Cada una con 4 opciones plausibles y UNA sola correcta; los distractores deben ser errores típicos de estudiantes, no absurdos; evita "todas las anteriores" y "ninguna de las anteriores"; opciones de largo parecido.
@@ -42,10 +49,10 @@ Responde SOLO JSON: {"preguntas":[{"enunciado":"...","opciones":["...","...","..
   vf: (n) => `${REGLAS}
 Crea EXACTAMENTE ${n} afirmaciones de VERDADERO O FALSO. Mezcla verdaderas y falsas en proporción parecida (las falsas deben ser errores sutiles pero claramente falsos según el material, p. ej. cambiar un requisito, un efecto o una condición); nada de "siempre/nunca" como única pista.
 Responde SOLO JSON: {"preguntas":[{"enunciado":"afirmación","correcta":true,"explicacion":"si es falsa, indica cuál sería lo correcto","concepto":"..."}]}`,
-  caso: (n, m) => `${REGLAS}
-Crea EXACTAMENTE ${n} CASOS PRÁCTICOS ficticios, al estilo de una prueba de Derecho de pregrado. Cada caso lleva:
+  caso: (n, m, ext = 'breve') => `${REGLAS}
+Crea EXACTAMENTE ${n} ${n === 1 ? 'CASO PRÁCTICO ficticio' : 'CASOS PRÁCTICOS ficticios'}, al estilo de una prueba de Derecho de pregrado. Cada caso lleva:
 - "titulo": corto.
-- "hechos": un relato de 120 a 220 palabras con personas y empresas de nombres inventados, fechas, montos y circunstancias concretas. Sin dar las respuestas ni decir qué norma se aplica.
+- "hechos": ${RELATO[ext] || RELATO.breve} Sin dar las respuestas ni decir qué norma se aplica.
 - "preguntas": EXACTAMENTE ${m} preguntas de DESARROLLO que obliguen a APLICAR la materia a los hechos (por ejemplo "¿Se cumplen los requisitos de…?", "¿Qué efectos produce…?", "¿Qué puede exigir X a Y y por qué?"). Cada pregunta con una "pauta" de 3 a 5 ideas clave que una buena respuesta debe contener (aplicadas al caso).
 Los HECHOS son inventados, pero las reglas, requisitos y conceptos jurídicos con que se resuelve el caso deben salir SOLO del MATERIAL. Cada caso trata conceptos distintos del material.
 Responde SOLO JSON: {"casos":[{"titulo":"...","hechos":"...","preguntas":[{"enunciado":"...","pauta":["idea clave 1","idea clave 2","idea clave 3"],"concepto":"..."}]}]}`,
@@ -54,8 +61,8 @@ Crea EXACTAMENTE ${n} preguntas de DESARROLLO (respuesta escrita de un párrafo 
 Responde SOLO JSON: {"preguntas":[{"enunciado":"...","pauta":["idea clave 1","idea clave 2","idea clave 3"],"concepto":"..."}]}`,
 };
 
-export async function generarPreguntasDeTipo(tipo, n, material, { evitar = [], porCaso = 3, ...opts } = {}) {
-  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n, porCaso) }, { role: 'user', content: (evitar.length ? `PREGUNTAS YA USADAS EN OTRAS PRUEBAS (no las repitas ni hagas versiones casi iguales; pregunta otros aspectos del material):\n${evitar.slice(0, 25).map((t) => `- ${t.slice(0, 110)}`).join('\n')}\n\n` : '') + `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
+export async function generarPreguntasDeTipo(tipo, n, material, { evitar = [], porCaso = 3, extension = 'breve', ...opts } = {}) {
+  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n, porCaso, extension) }, { role: 'user', content: (evitar.length ? `PREGUNTAS YA USADAS EN OTRAS PRUEBAS (no las repitas ni hagas versiones casi iguales; pregunta otros aspectos del material):\n${evitar.slice(0, 25).map((t) => `- ${t.slice(0, 110)}`).join('\n')}\n\n` : '') + `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
   return extraerJson(out);
 }
 

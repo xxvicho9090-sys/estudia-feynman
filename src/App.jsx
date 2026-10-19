@@ -43,6 +43,8 @@ export default function App() {
   const local = useLocal();
   const faseAntes = useRef(local.fase);
   const [aplicando, setAplicando] = useState(false);
+  const [papelera, setPapelera] = useState(null); // PDFs recién borrados (para poder deshacer)
+  const tPapelera = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -87,6 +89,24 @@ export default function App() {
   const volver = useCallback(() => { if (screen.name !== 'home' && history.length > 1) history.back(); else setScreen(HOME); }, [screen]);
 
   const docDe = (id) => docs.find((d) => d.id === id);
+  // Borra uno o varios PDFs y deja unos segundos el botón "Deshacer".
+  const borrarDocs = async (ids) => {
+    const quitar = docs.filter((d) => ids.includes(d.id));
+    if (!quitar.length) return;
+    for (const d of quitar) await borrarDoc(d.id);
+    setDocs((ds) => ds.filter((d) => !ids.includes(d.id)));
+    setSel((s) => (ids.includes(s.docId) ? { ramoId: s.ramoId } : s));
+    setPapelera(quitar);
+    clearTimeout(tPapelera.current);
+    tPapelera.current = setTimeout(() => setPapelera(null), 10000);
+  };
+  const deshacerBorrado = async () => {
+    const q = papelera;
+    if (!q) return;
+    clearTimeout(tPapelera.current); setPapelera(null);
+    for (const d of q) await guardarDoc(d);
+    setDocs((ds) => [...ds, ...q].sort((a, b) => a.creado - b.creado));
+  };
   const guardar = async (doc) => { await guardarDoc(doc); setDocs((ds) => ds.map((d) => (d.id === doc.id ? doc : d))); };
 
   const subir = async (files, destino) => {
@@ -213,6 +233,7 @@ export default function App() {
     <Home ramos={ramos} docs={docs} sel={sel} setSel={setSel} avisos={avisos} cerrarAviso={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} progreso={progreso} onFiles={subir}
       onOpenConcept={(docId, conceptId) => ir({ name: 'explain', docId, conceptId })} onEditDoc={setEditId} onNewRamo={() => setRamoSheet(null)} onEditRamo={setRamoSheet} onSettings={() => ir({ name: 'settings' })}
       tab={tab} setTab={setTab} pruebas={pruebas} errorPrueba={errorPrueba} onCrearPrueba={crearNuevaPrueba} onAbrirPrueba={abrirPrueba}
+      onBorrarDocs={borrarDocs}
       onBorrarPrueba={async (id) => { await borrarPrueba(id); pruebasRef.current = pruebasRef.current.filter((p) => p.id !== id); setPruebas(pruebasRef.current); }} />
   );
 
@@ -222,7 +243,13 @@ export default function App() {
       {vista}
       {editDoc && <Editor key={editDoc.id} doc={editDoc} ramos={ramos} onClose={() => setEditId(null)}
         onSave={async (d) => { await guardar(d); setEditId(null); setSel((s) => (s.docId === d.id ? { ramoId: d.ramoId, docId: d.id } : s)); setToast('Cambios guardados'); }}
-        onDeleteDoc={async () => { await borrarDoc(editDoc.id); setDocs((ds) => ds.filter((x) => x.id !== editDoc.id)); setEditId(null); setSel({ ramoId: editDoc.ramoId }); }} />}
+        onDeleteDoc={async () => { setEditId(null); setSel({ ramoId: editDoc.ramoId }); await borrarDocs([editDoc.id]); }} />}
+      {papelera && (
+        <div className="actualizar deshacer" role="status">
+          <span>{papelera.length === 1 ? 'PDF borrado' : `${papelera.length} PDFs borrados`}</span>
+          <button className="btn" onClick={deshacerBorrado}>Deshacer</button>
+        </div>
+      )}
       {ramoSheet !== undefined && <RamoSheet key={String(ramoSheet)} ramo={ramoSheet ? ramos.find((r) => r.id === ramoSheet) : null} nDocs={docs.filter((d) => d.ramoId === ramoSheet).length}
         onClose={() => setRamoSheet(undefined)} onSave={guardarRamoNuevoOEditado} onDelete={borrarRamoYDocs} />}
       {trabajando && (

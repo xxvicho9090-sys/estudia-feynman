@@ -207,3 +207,14 @@ code{background:var(--bg);padding:1px 6px;border-radius:6px;font-size:12px;word-
 /* Botón "Actualizar" cuando hay una versión nueva */
 .actualizar{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);transform:translateX(-50%);z-index:95;display:flex;align-items:center;gap:14px;max-width:min(92vw,520px);background:var(--ink);color:#fff;padding:8px 8px 8px 20px;border-radius:999px;box-shadow:0 12px 32px rgba(36,33,30,.35);font-weight:700;font-size:14px;animation:in .25s ease-out}
 .actualizar .btn{height:44px;padding:0 20px;font-size:14px;box-shadow:none;white-space:nowrap}
+
+/* Borrar PDFs: botón en cada PDF, selección múltiple y "Deshacer" */
+.tile-wrap{position:relative}
+.tile-wrap .tile{width:100%;height:100%;padding-bottom:50px}
+.tile-del{position:absolute;right:10px;bottom:10px;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:#fff;display:grid;place-items:center;color:var(--bad)}
+.tile-del:hover{background:var(--bad-bg)}
+.tile-check{position:absolute;right:14px;bottom:14px;width:28px;height:28px;border-radius:50%;border:2px solid var(--line2);background:#fff;display:grid;place-items:center;font-weight:800;color:#fff}
+.tile-wrap.sel .tile{outline:3px solid var(--acc);outline-offset:-1px;background:var(--acc-soft)}
+.tile-wrap.sel .tile-check{background:var(--acc);border-color:var(--acc)}
+.selbar{bottom:calc(env(safe-area-inset-bottom) + 18px);padding-right:8px}
+.deshacer{bottom:calc(env(safe-area-inset-bottom) + 84px)}

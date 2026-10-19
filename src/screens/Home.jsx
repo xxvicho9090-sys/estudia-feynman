@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Gear, Plus, Folder } from '../icons.jsx';
+import { Gear, Plus, Folder, Trash } from '../icons.jsx';
 import RamosPanel from './RamosPanel.jsx';
 import { BannerInstalar } from './Instalar.jsx';
 import PruebasTab from './PruebasTab.jsx';
@@ -17,8 +17,13 @@ function Notas({ docs }) {
   return <div className="stats">{totalConceptos(docs)} conceptos · {evaluados(docs)} evaluados{p && <> · promedio <b>{p}</b></>}</div>;
 }
 
-export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba }) {
+export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs }) {
   const input = useRef(null);
+  const [modoSel, setModoSel] = useState(false);
+  const [marcados, setMarcados] = useState([]);
+  const [confirmar, setConfirmar] = useState(null); // lista de PDFs a borrar, esperando confirmación
+  const alternar = (id) => setMarcados((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]));
+  const salirSel = () => { setModoSel(false); setMarcados([]); };
   const local = useLocal();
   const [panel, setPanel] = useState(false);
   const [pendientes, setPendientes] = useState(null);
@@ -40,7 +45,13 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
     cabecera = <><div className="crumb">Ramo</div><h1>{ramo.nombre}</h1><Notas docs={docsRamo} /></>;
     cuerpo = !docsRamo.length
       ? <div className="empty">Este ramo no tiene PDFs.<br />Toca “Subir PDF” para agregar el primero.</div>
-      : <div className="grid">{docsRamo.map((d) => <Tile key={d.id} titulo={d.nombre} docs={[d]} onClick={() => setSel({ ramoId: ramo.id, docId: d.id })} />)}</div>;
+      : <div className="grid">{docsRamo.map((d) => (
+        <div key={d.id} className={'tile-wrap' + (modoSel && marcados.includes(d.id) ? ' sel' : '')}>
+          <Tile titulo={d.nombre} docs={[d]} pressed={modoSel ? marcados.includes(d.id) : undefined} onClick={() => (modoSel ? alternar(d.id) : setSel({ ramoId: ramo.id, docId: d.id }))} />
+          {modoSel
+            ? <span className="tile-check" aria-hidden="true">{marcados.includes(d.id) ? '✓' : ''}</span>
+            : <button className="tile-del" aria-label={`Borrar ${d.nombre}`} title="Borrar este PDF" onClick={() => setConfirmar([d])}><Trash /></button>}
+        </div>))}</div>;
   } else {
     cabecera = <><div className="crumb">Todos mis ramos</div><h1>Qué voy a<br />explicar hoy</h1></>;
     cuerpo = !ramos.length
@@ -62,6 +73,8 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
           <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
             {ramo && !doc && !enPruebas && <button className="ibtn" aria-label="Editar ramo" onClick={() => onEditRamo(ramo.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
             {doc && !enPruebas && <button className="ibtn" aria-label="Editar PDF y conceptos" onClick={() => onEditDoc(doc.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
+            {doc && !enPruebas && <button className="ibtn" style={{ color: 'var(--bad)' }} aria-label={`Borrar ${doc.nombre}`} title="Borrar este PDF" onClick={() => setConfirmar([doc])}><Trash /></button>}
+            {ramo && !doc && !enPruebas && docsRamo.length > 0 && <button className="ibtn" aria-label="Seleccionar PDFs para borrar" aria-pressed={modoSel} title="Seleccionar varios" style={modoSel ? { background: 'var(--acc-soft)', borderColor: 'var(--acc)' } : undefined} onClick={() => (modoSel ? salirSel() : setModoSel(true))}><span style={{ fontWeight: 800, fontSize: 18 }}>☑</span></button>}
             <BotonPantallaCompleta />
             <button className="ibtn" aria-label="Ajustes" onClick={onSettings}><Gear /></button>
             <button className="ibtn only-narrow" aria-label="Ver ramos y PDFs" onClick={() => setPanel(true)}><Folder /></button>
@@ -97,6 +110,14 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
         </>
       )}
 
+      {modoSel && (
+        <div className="actualizar selbar" role="status">
+          <span>{marcados.length === 0 ? 'Toca los PDFs que quieres borrar' : `${marcados.length} ${marcados.length === 1 ? 'seleccionado' : 'seleccionados'}`}</span>
+          <button className="linkbtn" style={{ color: '#fff' }} onClick={salirSel}>Cancelar</button>
+          <button className="btn" disabled={!marcados.length} onClick={() => setConfirmar(docsRamo.filter((d) => marcados.includes(d.id)))}>Borrar</button>
+        </div>
+      )}
+      {confirmar && <ConfirmarBorrar docs={confirmar} onCancel={() => setConfirmar(null)} onOk={() => { const ids = confirmar.map((d) => d.id); setConfirmar(null); salirSel(); onBorrarDocs(ids); }} />}
       {pendientes && <ElegirRamo archivos={pendientes} ramos={ramos} inicial={sel.ramoId} onCancel={() => setPendientes(null)} onOk={(destino) => { const f = pendientes; setPendientes(null); onFiles(f, destino); }} />}
       {progreso && (
         <div className="sheet" role="alertdialog" aria-label="Procesando">
@@ -112,10 +133,10 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
   );
 }
 
-function Tile({ titulo, docs, color, extra, onClick }) {
+function Tile({ titulo, docs, color, extra, onClick, pressed }) {
   const total = totalConceptos(docs), ev = evaluados(docs), p = prom(docs);
   return (
-    <button className="tile" onClick={onClick}>
+    <button className="tile" onClick={onClick} aria-pressed={pressed}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%' }}>
         {color && <span className="dot" style={{ background: color }} />}
         <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{titulo}</span>
@@ -148,6 +169,28 @@ function ElegirRamo({ archivos, ramos, inicial, onCancel, onOk }) {
         <div className="two" style={{ marginTop: 20 }}>
           <button className="btn ghost" onClick={onCancel}>Cancelar</button>
           <button className="btn" onClick={ok} disabled={nuevo && !nombre.trim()}>Subir</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Confirmación antes de borrar: dice exactamente qué se pierde.
+function ConfirmarBorrar({ docs, onCancel, onOk }) {
+  const conceptos = docs.reduce((n, d) => n + d.conceptos.length, 0);
+  const notas = docs.reduce((n, d) => n + d.conceptos.filter((c) => c.nota != null).length, 0);
+  return (
+    <div className="sheet" role="alertdialog" aria-modal="true" aria-label="Borrar PDFs" onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div>
+        <h2>{docs.length === 1 ? '¿Borrar este PDF?' : `¿Borrar ${docs.length} PDFs?`}</h2>
+        <ul style={{ margin: '10px 0 0', paddingLeft: 20, fontSize: 15, lineHeight: 1.6 }}>
+          {docs.slice(0, 5).map((d) => <li key={d.id} style={{ overflowWrap: 'anywhere' }}>{d.nombre}</li>)}
+          {docs.length > 5 && <li>y {docs.length - 5} más…</li>}
+        </ul>
+        <p className="sub" style={{ fontSize: 14, lineHeight: 1.5, margin: '12px 0 18px' }}>Se eliminan sus {conceptos} conceptos{notas ? ` y las ${notas} notas que sacaste` : ''}. Las pruebas ya creadas se conservan. Después podrás pulsar “Deshacer” unos segundos.</p>
+        <div className="two">
+          <button className="btn ghost" onClick={onCancel}>Cancelar</button>
+          <button className="btn" style={{ background: 'var(--bad-bar)', boxShadow: 'none' }} onClick={onOk}>Borrar</button>
         </div>
       </div>
     </div>

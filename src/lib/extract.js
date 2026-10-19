@@ -4,28 +4,36 @@ import { hayIA } from './ai.js';
 import { conceptosPorTitulos } from './heuristic.js';
 import { nuevoId, unirConceptos, limitarConceptos, maxPorTrozo, repartirTrozos } from './concepts.js';
 
-// Archivo PDF → { nombre, conceptos, aviso }. onProgress(texto, fraccion).
-export async function procesarPdf(file, onProgress) {
+// Archivo PDF → { nombre, conceptos, aviso, agotada }. onProgress(texto, fraccion).
+// opciones.signal cancela; opciones.sinIA separa por títulos sin gastar IA (para el resto de un pack cuando la IA ya se agotó).
+export async function procesarPdf(file, onProgress, { signal, sinIA = false } = {}) {
+  const cancelado = () => { if (signal?.aborted) throw new DOMException('cancelado', 'AbortError'); };
   onProgress?.('Leyendo el PDF…', 0);
   const paginas = await textoDePdf(file, (n, total) => onProgress?.(`Leyendo página ${n} de ${total}…`, (n / total) * 0.3));
+  cancelado();
   const texto = paginas.join('\n');
   if (texto.replace(/\s/g, '').length < 80) {
     return { nombre: file.name, conceptos: [], aviso: 'Este PDF parece una imagen escaneada: no tiene texto que leer. Puedes agregar los conceptos a mano.' };
   }
   let conceptos = [];
   let aviso = '';
-  if (hayIA()) {
+  let agotada = false;
+  if (hayIA() && !sinIA) {
     const trozos = repartirTrozos(trocear(texto));
     const porTrozo = maxPorTrozo(trozos.length);
     for (let i = 0; i < trozos.length; i++) {
       onProgress?.(`La IA busca conceptos (${i + 1} de ${trozos.length})…`, 0.3 + ((i + 1) / trozos.length) * 0.7);
+      cancelado();
       try {
-        conceptos.push(...(await conceptosDeTexto(trozos[i], undefined, porTrozo)));
+        conceptos.push(...(await conceptosDeTexto(trozos[i], { signal }, porTrozo)));
       } catch (e) {
-        if (e.code === 'badkey' || e.code === 'limit' || e.code === 'offline') { aviso = e.message; conceptos = []; break; }
+        if (e?.name === 'AbortError') throw e;
+        if (e.code === 'badkey' || e.code === 'limit' || e.code === 'offline') { aviso = e.message; conceptos = []; agotada = true; break; }
         console.warn('trozo omitido', e);
       }
     }
+  } else if (sinIA) {
+    aviso = 'La IA ya no estaba disponible: separé los conceptos por títulos. Revísalos o vuelve a subirlo más tarde.';
   } else {
     aviso = 'Sin IA conectada: separé los conceptos por títulos, que es menos preciso. Revísalos o conecta una IA gratis en Ajustes.';
   }
@@ -35,5 +43,5 @@ export async function procesarPdf(file, onProgress) {
   }
   conceptos = limitarConceptos(unirConceptos(conceptos)).map((c) => ({ id: nuevoId(), nombre: c.nombre, referencia: c.referencia, nota: null, notaFecha: null }));
   if (!conceptos.length && !aviso) aviso = 'No encontré conceptos en este PDF. Puedes agregarlos a mano.';
-  return { nombre: file.name.replace(/\.pdf$/i, ''), conceptos, aviso };
+  return { nombre: file.name.replace(/\.pdf$/i, ''), conceptos, aviso, agotada };
 }

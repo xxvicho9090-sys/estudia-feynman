@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Gear, Plus, Folder, Trash } from '../icons.jsx';
+import { Gear, Plus, Folder, Trash, Back } from '../icons.jsx';
 import RamosPanel from './RamosPanel.jsx';
 import { BannerInstalar } from './Instalar.jsx';
 import PruebasTab from './PruebasTab.jsx';
@@ -8,17 +8,28 @@ import { useLocal } from '../lib/local.js';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { hayIA } from '../lib/ai.js';
+import { soloPdfs, sinRepetidos, leerDrop, esDuplicado, tamanoLegible } from '../lib/archivos.js';
 import { promedio, evaluados, totalConceptos, colorRamo } from '../lib/ramos.js';
 
 const prom = (docs) => { const p = promedio(docs); return p == null ? null : formatoNota(p); };
+
+// Flecha para volver un paso (PDF → ramo → inicio), con el nombre de adónde lleva.
+function Atras({ texto, etiqueta, onClick }) {
+  return <button className="atras" aria-label={etiqueta} onClick={onClick}><Back /><span>{texto}</span></button>;
+}
 
 function Notas({ docs }) {
   const p = prom(docs);
   return <div className="stats">{totalConceptos(docs)} conceptos · {evaluados(docs)} evaluados{p && <> · promedio <b>{p}</b></>}</div>;
 }
 
-export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs }) {
+export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs, onCancelarSubida }) {
   const input = useRef(null);
+  const carpeta = useRef(null);
+  const [arrastrando, setArrastrando] = useState(false);
+  const [sinPdf, setSinPdf] = useState(false);
+  // Recibe lo elegido (archivos, carpeta o arrastrado): se queda solo con los PDFs, sin repetidos dentro del pack.
+  const recibir = (lista) => { const pdfs = sinRepetidos(soloPdfs(lista)); setSinPdf(!pdfs.length); if (pdfs.length) setPendientes(pdfs); };
   const [modoSel, setModoSel] = useState(false);
   const [marcados, setMarcados] = useState([]);
   const [confirmar, setConfirmar] = useState(null); // lista de PDFs a borrar, esperando confirmación
@@ -33,7 +44,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
 
   let cabecera, cuerpo;
   if (doc) {
-    cabecera = <><div className="crumb">{ramo?.nombre}</div><h1>{doc.nombre}</h1><Notas docs={[doc]} /></>;
+    cabecera = <><Atras texto={ramo?.nombre} etiqueta={`Volver a ${ramo?.nombre || 'el ramo'}`} onClick={() => setSel({ ramoId: ramo?.id })} /><h1>{doc.nombre}</h1><Notas docs={[doc]} /></>;
     cuerpo = !doc.conceptos.length
       ? <div className="empty">Este PDF no tiene conceptos todavía.<br /><button className="linkbtn" onClick={() => onEditDoc(doc.id)}>Agrégalos a mano</button></div>
       : <div className="list" role="list">{doc.conceptos.map((c) => (
@@ -42,9 +53,9 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
           {c.nota == null ? <span className="go">Explicar</span> : <span className={'chip ' + (c.nota >= 4 ? 'ok' : 'no')}>{formatoNota(c.nota)}</span>}
         </button>))}</div>;
   } else if (ramo) {
-    cabecera = <><div className="crumb">Ramo</div><h1>{ramo.nombre}</h1><Notas docs={docsRamo} /></>;
+    cabecera = <><Atras texto="Todos los ramos" etiqueta="Volver al inicio" onClick={() => { salirSel(); setSel({}); }} /><h1>{ramo.nombre}</h1><Notas docs={docsRamo} /></>;
     cuerpo = !docsRamo.length
-      ? <div className="empty">Este ramo no tiene PDFs.<br />Toca “Subir PDF” para agregar el primero.</div>
+      ? <div className="empty">Este ramo no tiene PDFs.<br />Toca “Subir PDFs” para agregar el primero.</div>
       : <div className="grid">{docsRamo.map((d) => (
         <div key={d.id} className={'tile-wrap' + (modoSel && marcados.includes(d.id) ? ' sel' : '')}>
           <Tile titulo={d.nombre} docs={[d]} pressed={modoSel ? marcados.includes(d.id) : undefined} onClick={() => (modoSel ? alternar(d.id) : setSel({ ramoId: ramo.id, docId: d.id }))} />
@@ -66,7 +77,10 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
   }
 
   return (
-    <div className="shell">
+    <div className={'shell' + (arrastrando ? ' drop' : '')}
+      onDragOver={(e) => { if (enPruebas || progreso || !e.dataTransfer?.types?.includes('Files')) return; e.preventDefault(); setArrastrando(true); }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setArrastrando(false); }}
+      onDrop={async (e) => { e.preventDefault(); setArrastrando(false); if (enPruebas || progreso) return; recibir(await leerDrop(e.dataTransfer)); }}>
       <main className="main">
         <div className="head">
           <div style={{ minWidth: 0 }}>{cabecera}</div>
@@ -86,8 +100,18 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
           <button role="tab" aria-selected={enPruebas} className={enPruebas ? 'on' : ''} onClick={() => setTab('pruebas')}>Pruebas</button>
         </div>
 
-        <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) setPendientes(f); }} />
-        {!enPruebas && <button className="btn block up" onClick={() => input.current.click()} disabled={!!progreso}><Plus /> Subir PDF</button>}
+        <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) recibir(f); }} />
+        <input ref={carpeta} type="file" webkitdirectory="" directory="" multiple hidden onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) recibir(f); }} />
+        {!enPruebas && (
+          <>
+            <div className="subir-fila">
+              <button className="btn" style={{ flex: 1 }} onClick={() => input.current.click()} disabled={!!progreso}><Plus /> Subir PDFs</button>
+              <button className="btn ghost" onClick={() => carpeta.current.click()} disabled={!!progreso} title="Sube todos los PDFs de una carpeta"><Folder /> Subir carpeta</button>
+            </div>
+            <div className="sub" style={{ marginTop: 8 }}>Puedes elegir muchos PDFs a la vez (con Ctrl o Shift), una carpeta entera, o arrastrarlos aquí.</div>
+            {sinPdf && <div className="notice" role="alert">No encontré PDFs en lo que elegiste. <button className="linkbtn" onClick={() => setSinPdf(false)}>Entendido</button></div>}
+          </>
+        )}
 
         <BannerIA />
         {!enPruebas && !hayIA() && local.fase === 'inicio' && !local.pregunta && <button className="notice info" onClick={onSettings}>Falta conectar una IA gratis: sin ella no puedo sacar conceptos con precisión ni evaluarte. <b>Tocar para conectarla.</b></button>}
@@ -118,14 +142,16 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
         </div>
       )}
       {confirmar && <ConfirmarBorrar docs={confirmar} onCancel={() => setConfirmar(null)} onOk={() => { const ids = confirmar.map((d) => d.id); setConfirmar(null); salirSel(); onBorrarDocs(ids); }} />}
-      {pendientes && <ElegirRamo archivos={pendientes} ramos={ramos} inicial={sel.ramoId} onCancel={() => setPendientes(null)} onOk={(destino) => { const f = pendientes; setPendientes(null); onFiles(f, destino); }} />}
+      {pendientes && <ElegirRamo archivos={pendientes} ramos={ramos} docs={docs} inicial={sel.ramoId} onCancel={() => setPendientes(null)} onOk={(destino, elegidos) => { setPendientes(null); onFiles(elegidos, destino); }} />}
       {progreso && (
         <div className="sheet" role="alertdialog" aria-label="Procesando">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div className="spin" /><b style={{ fontSize: 18 }}>Preparando tus conceptos</b></div>
-            <div className="sub" style={{ marginTop: 10 }}>{progreso.archivo}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div className="spin" /><b style={{ fontSize: 18 }}>{progreso.total > 1 ? `PDF ${progreso.indice} de ${progreso.total}` : 'Preparando tus conceptos'}</b></div>
+            <div className="sub" style={{ marginTop: 10, overflowWrap: 'anywhere' }}>{progreso.archivo}</div>
             <div className="sub">{progreso.texto}</div>
-            <div className="prog" style={{ marginTop: 14, height: 8 }}><i style={{ width: `${Math.round(progreso.fraccion * 100)}%` }} /></div>
+            <div className="prog" style={{ marginTop: 14, height: 8 }}><i style={{ width: `${Math.round(((progreso.total > 1 ? progreso.indice - 1 + progreso.fraccion : progreso.fraccion) / (progreso.total || 1)) * 100)}%` }} /></div>
+            {progreso.total > 1 && <div className="sub" style={{ marginTop: 8 }}>Avance general: {Math.round(((progreso.indice - 1 + progreso.fraccion) / progreso.total) * 100)} %. Con muchos PDFs puede tardar varios minutos.</div>}
+            <button className="linkbtn" style={{ marginTop: 14 }} onClick={onCancelarSubida}>{progreso.total > 1 ? 'Cancelar lo que falta' : 'Cancelar'}</button>
           </div>
         </div>
       )}
@@ -148,27 +174,60 @@ function Tile({ titulo, docs, color, extra, onClick, pressed }) {
   );
 }
 
-// Pregunta en qué ramo van los PDFs: uno existente o uno nuevo.
-function ElegirRamo({ archivos, ramos, inicial, onCancel, onOk }) {
+// Pack de PDFs: elige en qué ramo van y cuáles subir. Se puede quitar cualquiera; los repetidos vienen sin marcar.
+const alternarEn = (set, i) => { const n = new Set(set); if (n.has(i)) n.delete(i); else n.add(i); return n; };
+
+function ElegirRamo({ archivos, ramos, docs, inicial, onCancel, onOk }) {
   const [valor, setValor] = useState(inicial || ramos[0]?.id || '__nuevo');
   const [nombre, setNombre] = useState('');
+  const [quitados, setQuitados] = useState(new Set()); // desmarcados por la persona
+  const [conRepetidos, setConRepetidos] = useState(new Set()); // repetidos que marcó a propósito
   const nuevo = valor === '__nuevo';
-  const ok = () => onOk(nuevo ? { nuevo: nombre.trim() } : { ramoId: valor });
+  const delRamo = nuevo ? [] : docs.filter((d) => d.ramoId === valor);
+  const repetido = archivos.map((f) => esDuplicado(f, delRamo));
+  const incluido = (i) => (repetido[i] ? conRepetidos.has(i) : !quitados.has(i));
+  const elegidos = archivos.filter((_, i) => incluido(i));
+  const peso = elegidos.reduce((n, f) => n + f.size, 0);
+  const nRep = repetido.filter(Boolean).length;
+  const alternar = (i) => (repetido[i] ? setConRepetidos((s) => alternarEn(s, i)) : setQuitados((s) => alternarEn(s, i)));
+  const todos = (marcar) => { setConRepetidos(new Set()); setQuitados(marcar ? new Set() : new Set(archivos.map((_, i) => i).filter((i) => !repetido[i]))); };
+  const ok = () => onOk(nuevo ? { nuevo: nombre.trim() } : { ramoId: valor }, elegidos);
   return (
     <div className="sheet" role="dialog" aria-modal="true" aria-label="Elegir ramo">
       <div>
-        <h2>¿En qué ramo van?</h2>
-        <div className="sub" style={{ marginBottom: 16 }}>{archivos.length === 1 ? archivos[0].name : `${archivos.length} PDFs`}</div>
-        <label className="l" htmlFor="rm">Ramo</label>
+        <h2>{archivos.length === 1 ? '¿En qué ramo va?' : `Subir ${archivos.length} PDFs: ¿en qué ramo van?`}</h2>
+        <label className="l" htmlFor="rm" style={{ marginTop: 14 }}>Ramo</label>
         <select id="rm" className="txt" value={valor} onChange={(e) => setValor(e.target.value)}>
           {ramos.map((r) => <option key={r.id} value={r.id}>{r.nombre}</option>)}
           <option value="__nuevo">+ Crear ramo nuevo…</option>
         </select>
         {nuevo && <><label className="l" htmlFor="rn" style={{ marginTop: 14 }}>Nombre del ramo nuevo</label>
           <input id="rn" className="txt" autoFocus value={nombre} onChange={(e) => setNombre(e.target.value)} placeholder="Ej.: Derecho societario" /></>}
+
+        {archivos.length > 1 && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 }}>
+              <div className="l" style={{ margin: 0 }}>Archivos del pack</div>
+              <span><button className="linkbtn" style={{ fontSize: 13 }} onClick={() => todos(true)}>Marcar todos</button> · <button className="linkbtn" style={{ fontSize: 13 }} onClick={() => todos(false)}>Quitar todos</button></span>
+            </div>
+            <div className="pack" role="group" aria-label="PDFs a subir">
+              {archivos.map((f, i) => (
+                <label key={i} className="pack-fila">
+                  <input type="checkbox" checked={incluido(i)} onChange={() => alternar(i)} />
+                  <span className="pack-n">{f.name}</span>
+                  {repetido[i] && <span className="pack-rep">Ya está en este ramo</span>}
+                  <span className="sub">{tamanoLegible(f.size)}</span>
+                </label>
+              ))}
+            </div>
+            {nRep > 0 && <div className="sub" style={{ marginTop: 8 }}>{nRep === 1 ? '1 PDF ya estaba' : `${nRep} PDFs ya estaban`} en este ramo y vienen sin marcar; márcalos si quieres subirlos otra vez.</div>}
+            {elegidos.length > 5 && <div className="sub" style={{ marginTop: 8 }}>Con muchos PDFs puede tardar varios minutos. Si una IA llega a su límite, sigo con la siguiente que tengas conectada.</div>}
+          </>
+        )}
+
         <div className="two" style={{ marginTop: 20 }}>
           <button className="btn ghost" onClick={onCancel}>Cancelar</button>
-          <button className="btn" onClick={ok} disabled={nuevo && !nombre.trim()}>Subir</button>
+          <button className="btn" onClick={ok} disabled={!elegidos.length || (nuevo && !nombre.trim())}>{elegidos.length === 1 ? 'Subir 1 PDF' : `Subir ${elegidos.length} PDFs`}{peso && elegidos.length > 1 ? ` (${tamanoLegible(peso)})` : ''}</button>
         </div>
       </div>
     </div>

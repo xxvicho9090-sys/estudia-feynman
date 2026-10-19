@@ -218,3 +218,24 @@ code{background:var(--bg);padding:1px 6px;border-radius:6px;font-size:12px;word-
 .tile-wrap.sel .tile-check{background:var(--acc);border-color:var(--acc)}
 .selbar{bottom:calc(env(safe-area-inset-bottom) + 18px);padding-right:8px}
 .deshacer{bottom:calc(env(safe-area-inset-bottom) + 84px)}
+
+/* Flecha para volver */
+.atras{display:inline-flex;align-items:center;gap:8px;max-width:100%;border:0;background:transparent;padding:6px 12px 6px 4px;margin:-6px 0 2px -4px;border-radius:12px;color:var(--mut);font-weight:700;font-size:14px}
+.atras svg{flex:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:6px;width:34px;height:34px;color:var(--ink)}
+.atras span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.atras:hover{color:var(--ink)}.atras:hover svg{background:var(--acc-soft);border-color:var(--acc)}
+
+/* Subir un pack de PDFs */
+.subir-fila{display:flex;gap:12px;margin-top:18px;flex-wrap:wrap}
+.subir-fila .btn{flex:1 1 180px}
+.shell.drop::after{content:'Suelta aquí tus PDFs o una carpeta';position:fixed;inset:12px;z-index:70;display:grid;place-items:center;text-align:center;padding:24px;border:3px dashed var(--acc);border-radius:24px;background:rgba(255,255,255,.92);font-weight:800;font-size:22px;color:var(--acc-d);pointer-events:none}
+.pack{margin-top:8px;max-height:min(280px,38vh);overflow:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+.pack-fila{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--soft);cursor:pointer;font-size:14px;font-weight:600}
+.pack-fila:last-child{border-bottom:0}
+.pack-fila input{width:20px;height:20px;accent-color:var(--acc);flex:none}
+.pack-n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pack-rep{font-size:11px;font-weight:700;color:#8A5A00;background:#FFF1CC;padding:2px 8px;border-radius:999px;white-space:nowrap}
+
+/* Retroalimentación: tarjetas con cada pregunta en que perdiste puntos */
+.hoja.err-card{min-height:0;padding:22px clamp(16px,4vw,30px) 20px;gap:0;margin-bottom:14px}
+.err-tipo{font:700 12px 'Plus Jakarta Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#a52a1a;margin-bottom:10px}

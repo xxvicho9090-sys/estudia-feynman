@@ -54,7 +54,7 @@ function Marca({ p, respuesta, evaluacion }) {
   return <span className={'roja' + (r.puntos >= r.max * 0.999 ? ' bien' : '')}>{pts(r.puntos)}/{r.max}</span>;
 }
 
-function Pregunta({ p, n, modo, respuesta, evaluacion, onResp }) {
+export function Pregunta({ p, n, modo, respuesta, evaluacion, onResp }) {
   const corr = modo === 'corregida';
   return (
     <div className="q">

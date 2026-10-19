@@ -16,6 +16,7 @@ import { useActualizacion, aplicarActualizacion } from './actualizar.js';
 import { procesarPdf } from './lib/extract.js';
 import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo } from './lib/ramos.js';
+import { resumenSubida } from './lib/archivos.js';
 import { notaDeIdeas } from './lib/grade.js';
 
 const HOME = { name: 'home' };
@@ -37,6 +38,7 @@ export default function App() {
   const [trabajando, setTrabajando] = useState(null); // { titulo, texto, fraccion } al crear o corregir una prueba
   const [errorCorreccion, setErrorCorreccion] = useState('');
   const abortPrueba = useRef(null);
+  const abortSubida = useRef(null);
   const guardado = useRef({});
   const pruebasRef = useRef([]);
   const act = useActualizacion();
@@ -79,11 +81,13 @@ export default function App() {
 
   // El botón "atrás" del teléfono vuelve a la pantalla anterior en vez de cerrar la app.
   useEffect(() => {
-    history.replaceState({ screen: HOME }, '');
-    const on = (e) => { setEditId(null); setScreen(e.state?.screen || HOME); };
+    history.replaceState({ screen: HOME, sel: {} }, '');
+    const on = (e) => { setEditId(null); setScreen(e.state?.screen || HOME); if (e.state?.sel) setSel(e.state.sel); };
     window.addEventListener('popstate', on);
     return () => window.removeEventListener('popstate', on);
   }, []);
+  // Cada vez que eliges ramo o PDF se guarda un paso, para que "atrás" vuelva al anterior.
+  const elegir = useCallback((s) => { history.pushState({ screen: HOME, sel: s }, ''); setSel(s); }, []);
   const ir = useCallback((s) => { history.pushState({ screen: s }, ''); setScreen(s); }, []);
   const reemplazar = (s) => { history.replaceState({ screen: s }, ''); setScreen(s); };
   const volver = useCallback(() => { if (screen.name !== 'home' && history.length > 1) history.back(); else setScreen(HOME); }, [screen]);
@@ -115,26 +119,36 @@ export default function App() {
       const r = nuevoRamo(destino.nuevo, ramos);
       await guardarRamo(r); setRamos((rs) => [...rs, r]); ramoId = r.id;
     }
+    const ac = new AbortController();
+    abortSubida.current = ac;
     let ultimo = null;
+    let listos = 0, fallidos = 0, conceptos = 0, sinIA = false, cancelado = false;
     for (let i = 0; i < files.length; i++) {
+      if (ac.signal.aborted) { cancelado = true; break; }
       const f = files[i];
-      const etiqueta = `${f.name} (${i + 1} de ${files.length})`;
+      const base = { archivo: f.name, indice: i + 1, total: files.length };
       try {
-        setProgreso({ archivo: etiqueta, texto: 'Empezando…', fraccion: 0 });
-        const r = await procesarPdf(f, (texto, fraccion) => setProgreso({ archivo: etiqueta, texto, fraccion }));
+        setProgreso({ ...base, texto: 'Empezando…', fraccion: 0 });
+        const r = await procesarPdf(f, (texto, fraccion) => setProgreso({ ...base, texto, fraccion }), { signal: ac.signal, sinIA });
+        if (r.agotada) sinIA = true; // la IA se agotó: el resto del pack se separa por títulos en vez de fallar uno por uno
         const doc = { id: nuevoId(), ramoId, nombre: r.nombre, creado: Date.now(), conceptos: r.conceptos };
         await guardarDoc(doc);
         setDocs((ds) => [...ds, doc]);
-        ultimo = doc;
-        if (r.aviso) setAvisos((a) => [...a, { id: doc.id, doc: doc.nombre, texto: r.aviso }]);
+        ultimo = doc; listos += 1; conceptos += r.conceptos.length;
+        if (r.aviso && (files.length === 1 || !r.agotada || listos === 1)) setAvisos((a) => [...a, { id: doc.id, doc: doc.nombre, texto: r.aviso }]);
       } catch (e) {
+        if (e?.name === 'AbortError') { cancelado = true; break; }
         console.warn(e);
+        fallidos += 1;
         setAvisos((a) => [...a, { id: nuevoId(), doc: f.name, texto: e?.name === 'QuotaExceededError' ? 'No hay espacio en el dispositivo para guardar este PDF.' : 'No pude leer este archivo. ¿Es un PDF válido?' }]);
       }
     }
     setProgreso(null);
+    abortSubida.current = null;
     if (ultimo) setSel({ ramoId, docId: files.length === 1 ? ultimo.id : undefined });
+    if (files.length > 1 || cancelado) setToast(resumenSubida({ listos, conceptos, fallidos, cancelado, total: files.length }));
   };
+  const cancelarSubida = () => abortSubida.current?.abort();
 
   const guardarRamoNuevoOEditado = async (nombre) => {
     if (ramoSheet === null) {
@@ -230,7 +244,7 @@ export default function App() {
     vista = <Result concepto={c} resultado={screen.result} hayMas={hayMas} onBack={() => reemplazar(HOME)}
       onRetry={() => reemplazar({ name: 'explain', docId: screen.docId, conceptId: screen.conceptId })} onNext={() => siguiente(screen)} />;
   } else vista = (
-    <Home ramos={ramos} docs={docs} sel={sel} setSel={setSel} avisos={avisos} cerrarAviso={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} progreso={progreso} onFiles={subir}
+    <Home ramos={ramos} docs={docs} sel={sel} setSel={elegir} avisos={avisos} cerrarAviso={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} progreso={progreso} onFiles={subir} onCancelarSubida={cancelarSubida}
       onOpenConcept={(docId, conceptId) => ir({ name: 'explain', docId, conceptId })} onEditDoc={setEditId} onNewRamo={() => setRamoSheet(null)} onEditRamo={setRamoSheet} onSettings={() => ir({ name: 'settings' })}
       tab={tab} setTab={setTab} pruebas={pruebas} errorPrueba={errorPrueba} onCrearPrueba={crearNuevaPrueba} onAbrirPrueba={abrirPrueba}
       onBorrarDocs={borrarDocs}

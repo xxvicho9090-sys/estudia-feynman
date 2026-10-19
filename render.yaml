@@ -1,0 +1,19 @@
+services:
+  - type: web
+    runtime: static
+    name: estudia-feynman
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    headers:
+      - path: /update/*
+        name: Cache-Control
+        value: no-cache
+      - path: /update/*
+        name: Access-Control-Allow-Origin
+        value: "*"
+      - path: /index.html
+        name: Cache-Control
+        value: no-cache
+      - path: /ota.js
+        name: Cache-Control
+        value: no-cache

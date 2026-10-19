@@ -1,12 +1,15 @@
 import { generarPreguntasDeTipo, corregirDesarrollo } from './groq.js';
-import { armarMaterial, normalizarPreguntas, TIPOS, NOMBRES, totalPlan, calcularPrueba } from './quiz.js';
+import { armarMaterial, normalizarPreguntas, conceptosCubiertos, enunciadosPrevios, similares, TIPOS, NOMBRES, totalPlan, calcularPrueba } from './quiz.js';
 import { nuevoId } from './concepts.js';
 
 const FATALES = ['badkey', 'nokey', 'limit', 'offline'];
 
 // Crea una prueba nueva: genera las preguntas de cada tipo con la IA y las valida.
-export async function crearPrueba({ docs, origen, plan }, onProgress, signal) {
-  const material = armarMaterial(docs);
+// `previas` = pruebas anteriores del mismo material: se parte por los conceptos que aún no practicaste y se evita repetir preguntas.
+export async function crearPrueba({ docs, origen, plan, previas = [], evitarRepetir = true }, onProgress, signal) {
+  const vistos = evitarRepetir ? conceptosCubiertos(previas) : new Set();
+  const evitar = evitarRepetir ? enunciadosPrevios(previas) : [];
+  const material = armarMaterial(docs, 12000, Math.random, vistos);
   if (!material.conceptos) throw new Error('No hay conceptos en el material elegido. Sube un PDF o agrega conceptos primero.');
   const pasos = TIPOS.filter((t) => plan[t] > 0);
   const preguntas = [];
@@ -15,15 +18,24 @@ export async function crearPrueba({ docs, origen, plan }, onProgress, signal) {
     const tipo = pasos[i];
     onProgress?.(`Creando ${NOMBRES[tipo].toLowerCase()} (${i + 1} de ${pasos.length})…`, i / pasos.length);
     let lista = [];
+    const parecidas = []; // repetidas respecto de pruebas anteriores: solo se usan si no alcanza con preguntas nuevas
     for (let intento = 0; intento < 2 && lista.length < plan[tipo]; intento++) {
       const faltan = plan[tipo] - lista.length;
       try {
-        const crudo = await generarPreguntasDeTipo(tipo, intento ? faltan + 1 : faltan, material.texto, { signal });
-        lista.push(...normalizarPreguntas(tipo, crudo, { nuevoId }));
+        const crudo = await generarPreguntasDeTipo(tipo, intento ? faltan + 1 : faltan, material.texto, { signal, evitar });
+        // Por si la IA repite igual una pregunta de antes o de este mismo intento, se descarta.
+        for (const q of normalizarPreguntas(tipo, crudo, { nuevoId })) {
+          if (lista.some((x) => similares(q.enunciado, x.enunciado))) continue;
+          if (evitar.some((e) => similares(q.enunciado, e))) parecidas.push(q); else lista.push(q);
+        }
       } catch (e) {
         if (e?.name === 'AbortError' || FATALES.includes(e?.code)) throw e;
         if (intento) avisos.push(`No pude crear todas las preguntas de ${NOMBRES[tipo].toLowerCase()}.`);
       }
+    }
+    if (lista.length < plan[tipo] && parecidas.length) {
+      lista.push(...parecidas.slice(0, plan[tipo] - lista.length));
+      avisos.push('Algunas preguntas pueden parecerse a las de pruebas anteriores.');
     }
     lista = lista.slice(0, plan[tipo]);
     if (lista.length < plan[tipo] && !avisos.length) avisos.push(`De ${NOMBRES[tipo].toLowerCase()} salieron ${lista.length} de ${plan[tipo]} pedidas.`);
@@ -33,7 +45,9 @@ export async function crearPrueba({ docs, origen, plan }, onProgress, signal) {
   return {
     id: nuevoId(), creado: Date.now(), titulo: origen.nombre, origen, plan, preguntas, respuestas: {}, evaluaciones: {},
     estado: 'en curso', resultado: null, aviso: avisos.join(' '),
-    cobertura: `${material.conceptos} de ${material.total} conceptos`,
+    conceptosIds: material.ids,
+    cicloNuevo: material.cicloNuevo,
+    cobertura: `${material.conceptos} de ${material.total} conceptos${material.nuevos && previas.length ? ` (${material.nuevos} que aún no habías practicado)` : ''}`,
     pedidas: totalPlan(plan),
   };
 }

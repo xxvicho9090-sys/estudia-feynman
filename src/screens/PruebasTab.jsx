@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Trash } from '../icons.jsx';
 import { hayIA } from '../lib/ai.js';
-import { armarMaterial, presetPlan, planValido, totalPlan, NOMBRES, TIPOS, MAX_PREGUNTAS } from '../lib/quiz.js';
+import { armarMaterial, cobertura, mismoOrigen, presetPlan, planValido, totalPlan, NOMBRES, TIPOS, MAX_PREGUNTAS } from '../lib/quiz.js';
 import { formatoNota } from '../lib/grade.js';
 
 const PRESETS = [['alternativas', 'Alternativas'], ['vf', 'Verdadero o falso'], ['desarrollo', 'Desarrollo'], ['mixto', 'Mixto']];
@@ -23,6 +23,7 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
   const [preset, setPreset] = useState('mixto');
   const [plan, setPlan] = useState(presetPlan('mixto', 10));
   const [borrar, setBorrar] = useState(null);
+  const [evitarRepetir, setEvitarRepetir] = useState(true);
 
   const { docsOrigen, nombre } = useMemo(() => {
     if (origen.startsWith('d:')) { const d = docs.find((x) => x.id === origen.slice(2)); return { docsOrigen: d ? [d] : [], nombre: d?.nombre || '' }; }
@@ -31,6 +32,8 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
   }, [origen, docs, ramos]);
   const mat = useMemo(() => armarMaterial(docsOrigen), [docsOrigen]);
   const n = totalPlan(plan);
+  // Qué parte de este material ya practicaste con pruebas anteriores.
+  const cob = useMemo(() => cobertura(docsOrigen, pruebas.filter((x) => mismoOrigen(x.origen, { clave: origen, nombre }))), [docsOrigen, pruebas, origen, nombre]);
   const cambiar = (tipo, v) => { setPreset('custom'); setPlan({ ...plan, [tipo]: v }); };
   const elegirPreset = (p) => { setPreset(p); setPlan(presetPlan(p, Math.max(5, Math.min(n || 10, MAX_PREGUNTAS)))); };
   const puedeCrear = planValido(plan) && mat.conceptos > 0 && hayIA();
@@ -61,9 +64,15 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
         </div>
         <div className="sub" style={{ marginTop: 10 }}>{n} {n === 1 ? 'pregunta' : 'preguntas'} en total{n > MAX_PREGUNTAS ? ` (máximo ${MAX_PREGUNTAS})` : ''}. Desarrollo vale 3 puntos; las demás, 1.</div>
 
+        {cob.cubiertos > 0 && (
+          <label className="check" style={{ marginTop: 14 }}>
+            <input type="checkbox" checked={evitarRepetir} onChange={(e) => setEvitarRepetir(e.target.checked)} />
+            <span>Preguntas distintas a las de mis pruebas anteriores<br /><span className="sub">{cob.cubiertos >= cob.total ? 'Ya practicaste todo este material: empiezo un ciclo nuevo con preguntas diferentes.' : `Ya practicaste ${cob.cubiertos} de ${cob.total} conceptos; esta prueba parte por los que faltan.`}</span></span>
+          </label>
+        )}
         {!hayIA() && <div className="notice info">Para crear pruebas necesitas conectar una IA gratis (Ajustes).</div>}
         {errorPrueba && <div className="notice" role="alert">{errorPrueba}</div>}
-        <button className="btn block" style={{ marginTop: 16 }} disabled={!puedeCrear} onClick={() => onCrear({ docs: docsOrigen, origen: { nombre }, plan })}>Crear prueba</button>
+        <button className="btn block" style={{ marginTop: 16 }} disabled={!puedeCrear} onClick={() => onCrear({ docs: docsOrigen, origen: { nombre, clave: origen }, plan, evitarRepetir })}>Crear prueba</button>
       </section>
 
       <h2 className="h2" style={{ margin: '28px 0 0' }}>Mis pruebas</h2>

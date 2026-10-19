@@ -90,18 +90,73 @@ export function calcularPrueba(prueba) {
 
 export const contestadas = (prueba) => prueba.preguntas.filter((p) => { const r = prueba.respuestas?.[p.id]; return p.tipo === 'desarrollo' ? !!texto(r) : r !== undefined && r !== null; }).length;
 
-// Material para la IA: conceptos con su referencia, hasta ~maxChars, repartidos entre los PDFs elegidos.
-export function armarMaterial(docs, maxChars = 12000, rnd = Math.random) {
-  const todos = docs.flatMap((d) => d.conceptos.map((c) => ({ ...c, doc: d.nombre })));
-  const orden = barajar(todos, rnd);
+// Clave estable de un concepto (los PDFs viejos y los de prueba pueden no tener id).
+export const claveDe = (d, c) => c.id ?? `${d.nombre}|${c.nombre}`;
+
+// Material para la IA: conceptos con su referencia, hasta ~maxChars. Empieza por los que NO se han practicado
+// en pruebas anteriores (`vistos`); si ya se practicaron todos, empieza un ciclo nuevo con todos.
+export function armarMaterial(docs, maxChars = 12000, rnd = Math.random, vistos = new Set()) {
+  const todos = docs.flatMap((d) => d.conceptos.map((c) => ({ ...c, doc: d.nombre, clave: claveDe(d, c) })));
+  const nuevos = todos.filter((c) => !vistos.has(c.clave));
+  const cicloNuevo = todos.length > 0 && nuevos.length === 0;
+  const orden = cicloNuevo ? barajar(todos, rnd) : [...barajar(nuevos, rnd), ...barajar(todos.filter((c) => vistos.has(c.clave)), rnd)];
   const elegidos = [];
+  const ids = [];
   let n = 0;
   for (const c of orden) {
     const bloque = `## ${c.nombre}\n${c.referencia}`;
     if (n + bloque.length > maxChars && elegidos.length) continue;
-    elegidos.push(bloque); n += bloque.length;
+    elegidos.push(bloque); ids.push(c.clave); n += bloque.length;
   }
-  return { texto: elegidos.join('\n\n'), conceptos: elegidos.length, total: todos.length };
+  return { texto: elegidos.join('\n\n'), conceptos: elegidos.length, total: todos.length, ids, nuevos: ids.filter((k) => !vistos.has(k)).length, cicloNuevo };
+}
+
+// Conceptos ya usados en una lista de pruebas.
+export const conceptosCubiertos = (pruebas) => new Set(pruebas.flatMap((p) => p.conceptosIds || []));
+export function cobertura(docs, previas) {
+  const vistos = conceptosCubiertos(previas);
+  const claves = docs.flatMap((d) => d.conceptos.map((c) => claveDe(d, c)));
+  return { total: claves.length, cubiertos: claves.filter((k) => vistos.has(k)).length };
+}
+
+// Enunciados de pruebas anteriores (los más recientes primero, sin repetir) para pedirle a la IA que no los repita.
+export function enunciadosPrevios(pruebas, max = 40) {
+  const vistos = new Set();
+  const out = [];
+  for (const p of [...pruebas].sort((x, y) => y.creado - x.creado)) {
+    for (const q of p.preguntas) {
+      const t = q.enunciado.trim();
+      const k = t.toLowerCase();
+      if (vistos.has(k)) continue;
+      vistos.add(k); out.push(t);
+      if (out.length >= max) return out;
+    }
+  }
+  return out;
+}
+
+// ¿Dos enunciados son casi lo mismo? (solapamiento de palabras)
+const palabrasDe = (t) => new Set(String(t).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 3));
+export function similares(a, b) {
+  const x = palabrasDe(a), y = palabrasDe(b);
+  if (!x.size || !y.size) return false;
+  let comunes = 0;
+  for (const w of x) if (y.has(w)) comunes += 1;
+  return comunes / (x.size + y.size - comunes) >= 0.75;
+}
+
+// Origen de una prueba (todo / un ramo / un PDF).
+export const mismoOrigen = (a, b) => (a?.clave && b?.clave ? a.clave === b.clave : (a?.nombre ?? '') === (b?.nombre ?? ''));
+export function docsDeOrigen(origen, docs, ramos) {
+  const c = origen?.clave;
+  if (c?.startsWith('d:')) return docs.filter((d) => d.id === c.slice(2));
+  if (c?.startsWith('r:')) return docs.filter((d) => d.ramoId === c.slice(2));
+  if (c === 'todo') return docs;
+  const n = origen?.nombre; // pruebas antiguas sin clave: se busca por nombre
+  const r = ramos.find((x) => x.nombre === n);
+  if (r) return docs.filter((d) => d.ramoId === r.id);
+  const d = docs.find((x) => x.nombre === n);
+  return d ? [d] : docs;
 }
 
 // ---- Paginación: la prueba se ve como hojas de papel ----

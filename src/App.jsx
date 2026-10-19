@@ -18,6 +18,7 @@ import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo } from './lib/ramos.js';
 import { resumenSubida } from './lib/archivos.js';
 import { docsAMover, textoMovido } from './lib/mover.js';
+import { mismoOrigen, docsDeOrigen } from './lib/quiz.js';
 import { notaDeIdeas } from './lib/grade.js';
 
 const HOME = { name: 'home' };
@@ -221,7 +222,9 @@ export default function App() {
     abortPrueba.current = new AbortController();
     setTrabajando({ titulo: 'Creando tu prueba', texto: 'Preparando…', fraccion: 0 });
     try {
-      const p = await crearPrueba(cfg, (texto, fraccion) => setTrabajando({ titulo: 'Creando tu prueba', texto, fraccion }), abortPrueba.current.signal);
+      // Pruebas anteriores sobre el mismo material: la nueva evita sus preguntas y parte por lo que no has practicado.
+      const previas = pruebasRef.current.filter((x) => mismoOrigen(x.origen, cfg.origen));
+      const p = await crearPrueba({ ...cfg, previas }, (texto, fraccion) => setTrabajando({ titulo: 'Creando tu prueba', texto, fraccion }), abortPrueba.current.signal);
       await guardarPrueba(p);
       pruebasRef.current = [p, ...pruebasRef.current]; setPruebas(pruebasRef.current);
       setTrabajando(null);
@@ -229,7 +232,7 @@ export default function App() {
       ir({ name: 'rendir', pruebaId: p.id });
     } catch (e) {
       setTrabajando(null);
-      if (e?.name !== 'AbortError') setErrorPrueba(e?.message || 'No se pudo crear la prueba.');
+      if (e?.name !== 'AbortError') { setErrorPrueba(e?.message || 'No se pudo crear la prueba.'); setToast(e?.message || 'No se pudo crear la prueba.'); }
     }
   };
   const corregir = async (prueba) => {
@@ -245,6 +248,12 @@ export default function App() {
     } finally { setTrabajando(null); }
   };
   const abrirPrueba = (p) => ir(p.estado === 'en curso' ? { name: 'rendir', pruebaId: p.id } : { name: 'prueba-result', pruebaId: p.id });
+  // "Otra prueba distinta": misma configuración y material, preguntas nuevas (y conceptos que aún no practicaste primero).
+  const generarOtra = (p) => {
+    const docsOrigen = docsDeOrigen(p.origen, docs, ramos);
+    if (!docsOrigen.some((d) => d.conceptos.length)) { setToast('Ya no queda material de esta prueba (¿borraste los PDFs?).'); return; }
+    crearNuevaPrueba({ docs: docsOrigen, origen: p.origen, plan: p.plan, evitarRepetir: true });
+  };
   const rendirDeNuevo = async (p) => {
     const copia = { ...p, id: nuevoId(), creado: Date.now(), respuestas: {}, evaluaciones: {}, estado: 'en curso', resultado: null, entregada: undefined, pagina: 0, aviso: '' };
     await guardarPrueba(copia); pruebasRef.current = [copia, ...pruebasRef.current]; setPruebas(pruebasRef.current);
@@ -271,7 +280,7 @@ export default function App() {
   let vista;
   if (screen.name === 'settings') vista = <Settings onBack={volver} />;
   else if (screen.name === 'rendir' && pruebaDe(screen.pruebaId)) vista = <Rendir key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} onChange={actualizarPrueba} onBack={volverAPruebas} onEntregar={() => corregir({ ...pruebaDe(screen.pruebaId), entregada: Date.now() })} />;
-  else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} />;
+  else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} onOtra={() => generarOtra(pruebaDe(screen.pruebaId))} />;
   else if (screen.name === 'explain' && c) vista = <Explain key={screen.conceptId} doc={docDe(screen.docId)} concepto={c} indice={indice(screen)} onBack={volver} onResult={(t, ev) => resultado(screen, ev)} onGo={(id) => reemplazar({ name: 'explain', docId: screen.docId, conceptId: id })} />;
   else if (screen.name === 'result' && c && screen.result) {
     const d = docDe(screen.docId);

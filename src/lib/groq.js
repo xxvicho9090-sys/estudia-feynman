@@ -47,8 +47,8 @@ Crea EXACTAMENTE ${n} preguntas de DESARROLLO (respuesta escrita de un párrafo 
 Responde SOLO JSON: {"preguntas":[{"enunciado":"...","pauta":["idea clave 1","idea clave 2","idea clave 3"],"concepto":"..."}]}`,
 };
 
-export async function generarPreguntasDeTipo(tipo, n, material, opts) {
-  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n) }, { role: 'user', content: `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
+export async function generarPreguntasDeTipo(tipo, n, material, { evitar = [], ...opts } = {}) {
+  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n) }, { role: 'user', content: (evitar.length ? `PREGUNTAS YA USADAS EN OTRAS PRUEBAS (no las repitas ni hagas versiones casi iguales; pregunta otros aspectos del material):\n${evitar.slice(0, 25).map((t) => `- ${t.slice(0, 110)}`).join('\n')}\n\n` : '') + `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
   return extraerJson(out);
 }
 

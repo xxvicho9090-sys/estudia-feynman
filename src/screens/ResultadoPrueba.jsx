@@ -8,7 +8,7 @@ import { formatoNota, mensajeNota } from '../lib/grade.js';
 const pts = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 
 // Prueba corregida: resumen con la nota y la prueba en hojas, con las correcciones en rojo.
-export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir, onVolver, onRepetir }) {
+export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir, onVolver, onRepetir, onOtra }) {
   const paginas = useMemo(() => paginar(prueba.preguntas), [prueba.preguntas]);
   const r = useMemo(() => calcularPrueba(prueba), [prueba]);
   const [i, setI] = useState(0);
@@ -69,9 +69,13 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
         <span className="sub">{i + 1} / {paginas.length}</span>
         <button className="btn" disabled={i === paginas.length - 1} onClick={() => ir(i + 1)}>Hoja siguiente <Chevron /></button>
       </nav>}
-      <div className="two" style={{ maxWidth: 794, margin: '4px auto 0' }}>
-        <button className="btn ghost" onClick={onRepetir}>Rendir de nuevo</button>
-        <button className="btn" onClick={onVolver}>Volver a Pruebas</button>
+      <div style={{ maxWidth: 794, margin: '4px auto 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <button className="btn block" onClick={onOtra}>Generar otra prueba distinta</button>
+        <div className="sub" style={{ textAlign: 'center', marginTop: -4 }}>Usa tu material con preguntas nuevas: parte por los conceptos que aún no practicaste y no repite estas preguntas.</div>
+        <div className="two">
+          <button className="btn ghost" onClick={onRepetir}>Rendir esta misma de nuevo</button>
+          <button className="btn ghost" onClick={onVolver}>Volver a Pruebas</button>
+        </div>
       </div>
     </div>
   );

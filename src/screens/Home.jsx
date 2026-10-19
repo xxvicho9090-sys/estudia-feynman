@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react';
-import { Gear, Plus, Folder, Trash, Back } from '../icons.jsx';
+import { Gear, Plus, Folder, Trash, Back, Mover } from '../icons.jsx';
+import MoverA from './MoverA.jsx';
+import { empezarArrastre, hayArrastreDoc, leerArrastre } from '../lib/mover.js';
 import RamosPanel from './RamosPanel.jsx';
 import { BannerInstalar } from './Instalar.jsx';
 import PruebasTab from './PruebasTab.jsx';
@@ -23,8 +25,22 @@ function Notas({ docs }) {
   return <div className="stats">{totalConceptos(docs)} conceptos · {evaluados(docs)} evaluados{p && <> · promedio <b>{p}</b></>}</div>;
 }
 
-export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs, onCancelarSubida }) {
+export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs, onCancelarSubida, onMoverDocs }) {
   const input = useRef(null);
+  const [moviendo, setMoviendo] = useState(null); // PDFs que se van a mover con el botón "Mover a…"
+  const [arrastrandoDoc, setArrastrandoDoc] = useState(false);
+  const [sobreRamo, setSobreRamo] = useState(null);
+  // Arrastrar un PDF (o los seleccionados) y soltarlo sobre un ramo.
+  const arrastrarDocs = (d) => ({
+    draggable: true,
+    onDragStart: (e) => { empezarArrastre(e, modoSel && marcados.includes(d.id) ? marcados : [d.id]); setArrastrandoDoc(true); },
+    onDragEnd: () => { setArrastrandoDoc(false); setSobreRamo(null); },
+  });
+  const soltarEn = (ramoId) => ({
+    onDragOver: (e) => { if (!hayArrastreDoc(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setSobreRamo(ramoId); },
+    onDragLeave: (e) => { if (!e.currentTarget.contains(e.relatedTarget)) setSobreRamo((x) => (x === ramoId ? null : x)); },
+    onDrop: (e) => { if (!hayArrastreDoc(e)) return; e.preventDefault(); e.stopPropagation(); setSobreRamo(null); setArrastrandoDoc(false); const ids = leerArrastre(e); if (ids.length) { setMarcados([]); onMoverDocs(ids, { ramoId }); } },
+  });
   const carpeta = useRef(null);
   const [arrastrando, setArrastrando] = useState(false);
   const [sinPdf, setSinPdf] = useState(false);
@@ -57,17 +73,20 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
     cuerpo = !docsRamo.length
       ? <div className="empty">Este ramo no tiene PDFs.<br />Toca “Subir PDFs” para agregar el primero.</div>
       : <div className="grid">{docsRamo.map((d) => (
-        <div key={d.id} className={'tile-wrap' + (modoSel && marcados.includes(d.id) ? ' sel' : '')}>
+        <div key={d.id} {...arrastrarDocs(d)} className={'tile-wrap' + (modoSel && marcados.includes(d.id) ? ' sel' : '')}>
           <Tile titulo={d.nombre} docs={[d]} pressed={modoSel ? marcados.includes(d.id) : undefined} onClick={() => (modoSel ? alternar(d.id) : setSel({ ramoId: ramo.id, docId: d.id }))} />
           {modoSel
             ? <span className="tile-check" aria-hidden="true">{marcados.includes(d.id) ? '✓' : ''}</span>
-            : <button className="tile-del" aria-label={`Borrar ${d.nombre}`} title="Borrar este PDF" onClick={() => setConfirmar([d])}><Trash /></button>}
+            : <>
+              <button className="tile-mover" aria-label={`Mover ${d.nombre} a otro ramo`} title="Mover a otro ramo" onClick={() => setMoviendo([d])}><Mover /></button>
+              <button className="tile-del" aria-label={`Borrar ${d.nombre}`} title="Borrar este PDF" onClick={() => setConfirmar([d])}><Trash /></button>
+            </>}
         </div>))}</div>;
   } else {
     cabecera = <><div className="crumb">Todos mis ramos</div><h1>Qué voy a<br />explicar hoy</h1></>;
     cuerpo = !ramos.length
       ? <div className="empty">Todavía no hay nada.<br />Sube un PDF de tus apuntes, elige su ramo y saco los conceptos para que los expliques.</div>
-      : <div className="grid">{ramos.map((r) => { const ds = docs.filter((d) => d.ramoId === r.id); return <Tile key={r.id} color={colorRamo(ramos, r)} titulo={r.nombre} docs={ds} extra={`${ds.length} PDFs`} onClick={() => setSel({ ramoId: r.id })} />; })}</div>;
+      : <div className="grid">{ramos.map((r) => { const ds = docs.filter((d) => d.ramoId === r.id); return <div key={r.id} {...soltarEn(r.id)} className={sobreRamo === r.id ? 'tile-wrap dropzona' : 'tile-wrap'}><Tile color={colorRamo(ramos, r)} titulo={r.nombre} docs={ds} extra={`${ds.length} PDFs`} onClick={() => setSel({ ramoId: r.id })} /></div>; })}</div>;
   }
 
   const enPruebas = tab === 'pruebas';
@@ -80,13 +99,14 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
     <div className={'shell' + (arrastrando ? ' drop' : '')}
       onDragOver={(e) => { if (enPruebas || progreso || !e.dataTransfer?.types?.includes('Files')) return; e.preventDefault(); setArrastrando(true); }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setArrastrando(false); }}
-      onDrop={async (e) => { e.preventDefault(); setArrastrando(false); if (enPruebas || progreso) return; recibir(await leerDrop(e.dataTransfer)); }}>
+      onDrop={async (e) => { e.preventDefault(); setArrastrando(false); if (hayArrastreDoc(e) || enPruebas || progreso) return; recibir(await leerDrop(e.dataTransfer)); }}>
       <main className="main">
         <div className="head">
           <div style={{ minWidth: 0 }}>{cabecera}</div>
           <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
             {ramo && !doc && !enPruebas && <button className="ibtn" aria-label="Editar ramo" onClick={() => onEditRamo(ramo.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
             {doc && !enPruebas && <button className="ibtn" aria-label="Editar PDF y conceptos" onClick={() => onEditDoc(doc.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
+            {doc && !enPruebas && <button className="ibtn" aria-label={`Mover ${doc.nombre} a otro ramo`} title="Mover a otro ramo" onClick={() => setMoviendo([doc])}><Mover /></button>}
             {doc && !enPruebas && <button className="ibtn" style={{ color: 'var(--bad)' }} aria-label={`Borrar ${doc.nombre}`} title="Borrar este PDF" onClick={() => setConfirmar([doc])}><Trash /></button>}
             {ramo && !doc && !enPruebas && docsRamo.length > 0 && <button className="ibtn" aria-label="Seleccionar PDFs para borrar" aria-pressed={modoSel} title="Seleccionar varios" style={modoSel ? { background: 'var(--acc-soft)', borderColor: 'var(--acc)' } : undefined} onClick={() => (modoSel ? salirSel() : setModoSel(true))}><span style={{ fontWeight: 800, fontSize: 18 }}>☑</span></button>}
             <BotonPantallaCompleta />
@@ -123,7 +143,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
       </main>
 
       <aside className="side" aria-label="Ramos y PDFs">
-        <RamosPanel ramos={ramos} docs={docs} sel={sel} onSelect={setSel} onNewRamo={onNewRamo} />
+        <RamosPanel ramos={ramos} docs={docs} sel={sel} onSelect={setSel} onNewRamo={onNewRamo} destino={soltarEn} sobre={sobreRamo} arrastrar={arrastrarDocs} />
       </aside>
       {panel && (
         <>
@@ -136,11 +156,14 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
 
       {modoSel && (
         <div className="actualizar selbar" role="status">
-          <span>{marcados.length === 0 ? 'Toca los PDFs que quieres borrar' : `${marcados.length} ${marcados.length === 1 ? 'seleccionado' : 'seleccionados'}`}</span>
+          <span>{marcados.length === 0 ? 'Toca los PDFs que quieres borrar o mover' : `${marcados.length} ${marcados.length === 1 ? 'seleccionado' : 'seleccionados'}`}</span>
           <button className="linkbtn" style={{ color: '#fff' }} onClick={salirSel}>Cancelar</button>
+          <button className="btn" style={{ background: 'var(--card)', color: 'var(--ink)' }} disabled={!marcados.length} onClick={() => setMoviendo(docsRamo.filter((d) => marcados.includes(d.id)))}>Mover</button>
           <button className="btn" disabled={!marcados.length} onClick={() => setConfirmar(docsRamo.filter((d) => marcados.includes(d.id)))}>Borrar</button>
         </div>
       )}
+      {arrastrandoDoc && <div className="actualizar arrastre-hint" role="status">Suelta el PDF sobre un ramo del panel de la derecha</div>}
+      {moviendo && <MoverA docs={moviendo} ramos={ramos} onCancel={() => setMoviendo(null)} onOk={(destino) => { const ids = moviendo.map((d) => d.id); setMoviendo(null); salirSel(); onMoverDocs(ids, destino); }} />}
       {confirmar && <ConfirmarBorrar docs={confirmar} onCancel={() => setConfirmar(null)} onOk={() => { const ids = confirmar.map((d) => d.id); setConfirmar(null); salirSel(); onBorrarDocs(ids); }} />}
       {pendientes && <ElegirRamo archivos={pendientes} ramos={ramos} docs={docs} inicial={sel.ramoId} onCancel={() => setPendientes(null)} onOk={(destino, elegidos) => { setPendientes(null); onFiles(elegidos, destino); }} />}
       {progreso && (

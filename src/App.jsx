@@ -17,6 +17,7 @@ import { procesarPdf } from './lib/extract.js';
 import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo } from './lib/ramos.js';
 import { resumenSubida } from './lib/archivos.js';
+import { docsAMover, textoMovido } from './lib/mover.js';
 import { notaDeIdeas } from './lib/grade.js';
 
 const HOME = { name: 'home' };
@@ -47,6 +48,8 @@ export default function App() {
   const [aplicando, setAplicando] = useState(false);
   const [papelera, setPapelera] = useState(null); // PDFs recién borrados (para poder deshacer)
   const tPapelera = useRef(null);
+  const [movido, setMovido] = useState(null); // último movimiento de PDFs (para poder deshacer)
+  const tMovido = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -110,6 +113,38 @@ export default function App() {
     clearTimeout(tPapelera.current); setPapelera(null);
     for (const d of q) await guardarDoc(d);
     setDocs((ds) => [...ds, ...q].sort((a, b) => a.creado - b.creado));
+  };
+  // Mueve PDFs a otro ramo (existente o nuevo) y deja unos segundos el botón "Deshacer".
+  const moverDocs = async (ids, destino) => {
+    let ramoId = destino.ramoId;
+    let nombre = ramos.find((r) => r.id === ramoId)?.nombre;
+    let ramoNuevoId = null;
+    if (destino.nuevo) {
+      const r = nuevoRamo(destino.nuevo, ramos);
+      await guardarRamo(r); setRamos((rs) => [...rs, r]); ramoId = r.id; nombre = r.nombre; ramoNuevoId = r.id;
+    }
+    const mover = docsAMover(docs, ids, ramoId);
+    if (!mover.length) { setToast('Ese PDF ya está en ese ramo'); return; }
+    const anteriores = mover.map((d) => ({ id: d.id, ramoId: d.ramoId }));
+    for (const d of mover) await guardarDoc({ ...d, ramoId });
+    const idsMov = new Set(mover.map((d) => d.id));
+    setDocs((ds) => ds.map((d) => (idsMov.has(d.id) ? { ...d, ramoId } : d)));
+    setSel((s) => (s.docId && idsMov.has(s.docId) ? { ramoId, docId: s.docId } : s));
+    setMovido({ anteriores, ramoNuevoId, texto: textoMovido(mover.length, nombre) });
+    clearTimeout(tMovido.current);
+    tMovido.current = setTimeout(() => setMovido(null), 10000);
+  };
+  const deshacerMovido = async () => {
+    const m = movido;
+    if (!m) return;
+    clearTimeout(tMovido.current); setMovido(null);
+    const previo = new Map(m.anteriores.map((a) => [a.id, a.ramoId]));
+    const actuales = docs.filter((d) => previo.has(d.id));
+    for (const d of actuales) await guardarDoc({ ...d, ramoId: previo.get(d.id) });
+    setDocs((ds) => ds.map((d) => (previo.has(d.id) ? { ...d, ramoId: previo.get(d.id) } : d)));
+    setSel((s) => (s.docId && previo.has(s.docId) ? { ramoId: previo.get(s.docId), docId: s.docId } : s));
+    // Si el movimiento había creado un ramo nuevo, al deshacer ese ramo queda vacío: se quita.
+    if (m.ramoNuevoId) { await borrarRamo(m.ramoNuevoId); setRamos((rs) => rs.filter((r) => r.id !== m.ramoNuevoId)); setSel((s) => (s.ramoId === m.ramoNuevoId ? {} : s)); }
   };
   const guardar = async (doc) => { await guardarDoc(doc); setDocs((ds) => ds.map((d) => (d.id === doc.id ? doc : d))); };
 
@@ -247,7 +282,7 @@ export default function App() {
     <Home ramos={ramos} docs={docs} sel={sel} setSel={elegir} avisos={avisos} cerrarAviso={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} progreso={progreso} onFiles={subir} onCancelarSubida={cancelarSubida}
       onOpenConcept={(docId, conceptId) => ir({ name: 'explain', docId, conceptId })} onEditDoc={setEditId} onNewRamo={() => setRamoSheet(null)} onEditRamo={setRamoSheet} onSettings={() => ir({ name: 'settings' })}
       tab={tab} setTab={setTab} pruebas={pruebas} errorPrueba={errorPrueba} onCrearPrueba={crearNuevaPrueba} onAbrirPrueba={abrirPrueba}
-      onBorrarDocs={borrarDocs}
+      onBorrarDocs={borrarDocs} onMoverDocs={moverDocs}
       onBorrarPrueba={async (id) => { await borrarPrueba(id); pruebasRef.current = pruebasRef.current.filter((p) => p.id !== id); setPruebas(pruebasRef.current); }} />
   );
 
@@ -258,6 +293,12 @@ export default function App() {
       {editDoc && <Editor key={editDoc.id} doc={editDoc} ramos={ramos} onClose={() => setEditId(null)}
         onSave={async (d) => { await guardar(d); setEditId(null); setSel((s) => (s.docId === d.id ? { ramoId: d.ramoId, docId: d.id } : s)); setToast('Cambios guardados'); }}
         onDeleteDoc={async () => { setEditId(null); setSel({ ramoId: editDoc.ramoId }); await borrarDocs([editDoc.id]); }} />}
+      {movido && !papelera && (
+        <div className="actualizar deshacer" role="status">
+          <span>{movido.texto}</span>
+          <button className="btn" onClick={deshacerMovido}>Deshacer</button>
+        </div>
+      )}
       {papelera && (
         <div className="actualizar deshacer" role="status">
           <span>{papelera.length === 1 ? 'PDF borrado' : `${papelera.length} PDFs borrados`}</span>

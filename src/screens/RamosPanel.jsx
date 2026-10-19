@@ -6,7 +6,7 @@ import { promedio, colorRamo } from '../lib/ramos.js';
 const nota = (docs) => { const p = promedio(docs); return p == null ? '—' : formatoNota(p); };
 
 // Panel con TODOS los ramos y sus PDFs. sel = { ramoId, docId }.
-export default function RamosPanel({ ramos, docs, sel, onSelect, onNewRamo, onClose }) {
+export default function RamosPanel({ ramos, docs, sel, onSelect, onNewRamo, onClose, destino, sobre, arrastrar }) {
   const [abiertos, setAbiertos] = useState({});
   const abierto = (r) => abiertos[r.id] ?? sel.ramoId === r.id;
   const pick = (s) => { onSelect(s); onClose?.(); };
@@ -27,13 +27,13 @@ export default function RamosPanel({ ramos, docs, sel, onSelect, onNewRamo, onCl
           const ds = docs.filter((d) => d.ramoId === r.id);
           const open = abierto(r);
           return (
-            <div key={r.id}>
+            <div key={r.id} {...(destino?.(r.id) || {})} className={sobre === r.id ? 'dropzona' : undefined}>
               <button className={'pbtn' + (sel.ramoId === r.id && !sel.docId ? ' on' : '')} aria-expanded={open}
                 onClick={() => { setAbiertos({ ...abiertos, [r.id]: sel.ramoId === r.id && !sel.docId ? !open : true }); onSelect({ ramoId: r.id }); }}>
                 <span className="dot" style={{ background: colorRamo(ramos, r) }} /><span>{r.nombre}</span><span className="n">{ds.length}</span>
               </button>
               {open && ds.map((d) => (
-                <button key={d.id} className={'pdoc' + (sel.docId === d.id ? ' on' : '')} onClick={() => pick({ ramoId: r.id, docId: d.id })}>
+                <button key={d.id} {...(arrastrar?.(d) || {})} className={'pdoc' + (sel.docId === d.id ? ' on' : '')} onClick={() => pick({ ramoId: r.id, docId: d.id })}>
                   <span>{d.nombre}</span><span className="n">{nota([d])}</span>
                 </button>
               ))}

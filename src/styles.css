@@ -239,3 +239,12 @@ code{background:var(--bg);padding:1px 6px;border-radius:6px;font-size:12px;word-
 /* Retroalimentación: tarjetas con cada pregunta en que perdiste puntos */
 .hoja.err-card{min-height:0;padding:22px clamp(16px,4vw,30px) 20px;gap:0;margin-bottom:14px}
 .err-tipo{font:700 12px 'Plus Jakarta Sans',sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#a52a1a;margin-bottom:10px}
+
+/* Mover PDFs: arrastrar sobre un ramo */
+.tile-mover{position:absolute;right:58px;bottom:10px;width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:#fff;display:grid;place-items:center;color:var(--ink)}
+.tile-mover:hover{background:var(--acc-soft);border-color:var(--acc)}
+.tile-wrap[draggable=true]{cursor:grab}.tile-wrap[draggable=true]:active{cursor:grabbing}
+.pdoc[draggable=true]{cursor:grab}
+.dropzona{outline:3px dashed var(--acc);outline-offset:2px;border-radius:14px;background:var(--acc-soft)}
+.arrastre-hint{pointer-events:none;bottom:calc(env(safe-area-inset-bottom) + 18px);padding:14px 22px}
+@media (max-width:799px){.arrastre-hint{display:none}}

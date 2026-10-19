@@ -1,5 +1,5 @@
 import { generarPreguntasDeTipo, corregirDesarrollo } from './groq.js';
-import { armarMaterial, normalizarPreguntas, normalizarCasos, aplanarCasos, conceptosCubiertos, enunciadosPrevios, similares, TIPOS, NOMBRES, totalPlan, preguntasPorCaso, extensionDe, EXTENSIONES, calcularPrueba } from './quiz.js';
+import { armarMaterial, normalizarPreguntas, normalizarCasos, aplanarCasos, conceptosCubiertos, enunciadosPrevios, similares, TIPOS, NOMBRES, totalPlan, preguntasPorCaso, extensionDe, EXTENSIONES, calcularPrueba, ordenarPreguntas, sumaPlan } from './quiz.js';
 import { nuevoId } from './concepts.js';
 
 const FATALES = ['badkey', 'nokey', 'limit', 'offline'];
@@ -11,6 +11,20 @@ export async function crearPrueba({ docs, origen, plan, previas = [], evitarRepe
   const evitar = evitarRepetir ? enunciadosPrevios(previas) : [];
   const material = armarMaterial(docs, 12000, Math.random, vistos);
   if (!material.conceptos) throw new Error('No hay conceptos en el material elegido. Sube un PDF o agrega conceptos primero.');
+  const { preguntas, avisos } = await generarLote({ plan, material, evitar, signal, onProgress });
+  if (!preguntas.length) throw new Error('La IA no pudo crear preguntas con este material. Intenta de nuevo.');
+  return {
+    id: nuevoId(), creado: Date.now(), titulo: origen.nombre, origen, plan, preguntas, respuestas: {}, evaluaciones: {},
+    estado: 'en curso', resultado: null, aviso: avisos.join(' '),
+    conceptosIds: material.ids,
+    cicloNuevo: material.cicloNuevo,
+    cobertura: `${material.conceptos} de ${material.total} conceptos${material.nuevos && previas.length ? ` (${material.nuevos} que aún no habías practicado)` : ''}`,
+    pedidas: totalPlan(plan),
+  };
+}
+
+// Genera las preguntas de un plan (de cada tipo y los casos) con la IA, validadas y sin repetir las de `evitar`.
+async function generarLote({ plan, material, evitar, signal, onProgress, desdeCaso = 0 }) {
   const pasos = [...TIPOS.filter((t) => plan[t] > 0), ...(plan.casos > 0 ? ['caso'] : [])]; // los casos prácticos van al final
   const preguntas = [];
   const avisos = [];
@@ -19,7 +33,7 @@ export async function crearPrueba({ docs, origen, plan, previas = [], evitarRepe
     onProgress?.(`Creando ${NOMBRES[tipo].toLowerCase()} (${i + 1} de ${pasos.length})…`, i / pasos.length);
     if (tipo === 'caso') {
       const casos = await crearCasos(plan, material, evitar, signal, avisos, (texto) => onProgress?.(texto, i / pasos.length));
-      preguntas.push(...aplanarCasos(casos, { nuevoId }));
+      preguntas.push(...aplanarCasos(casos, { nuevoId, desde: desdeCaso }));
       continue;
     }
     let lista = [];
@@ -46,15 +60,27 @@ export async function crearPrueba({ docs, origen, plan, previas = [], evitarRepe
     if (lista.length < plan[tipo] && !avisos.length) avisos.push(`De ${NOMBRES[tipo].toLowerCase()} salieron ${lista.length} de ${plan[tipo]} pedidas.`);
     preguntas.push(...lista);
   }
-  if (!preguntas.length) throw new Error('La IA no pudo crear preguntas con este material. Intenta de nuevo.');
-  return {
-    id: nuevoId(), creado: Date.now(), titulo: origen.nombre, origen, plan, preguntas, respuestas: {}, evaluaciones: {},
-    estado: 'en curso', resultado: null, aviso: avisos.join(' '),
-    conceptosIds: material.ids,
-    cicloNuevo: material.cicloNuevo,
-    cobertura: `${material.conceptos} de ${material.total} conceptos${material.nuevos && previas.length ? ` (${material.nuevos} que aún no habías practicado)` : ''}`,
-    pedidas: totalPlan(plan),
+  return { preguntas, avisos };
+}
+
+// Agrega más preguntas (de cualquier tipo, también casos) a una prueba ya creada. Parte por conceptos que la prueba aún no usa,
+// no repite las preguntas que ya tiene ni las de pruebas anteriores, y deja la prueba "en curso" para responder lo nuevo.
+export async function ampliarPrueba({ prueba, docs, plan, previas = [] }, onProgress, signal) {
+  const vistos = new Set([...conceptosCubiertos(previas), ...(prueba.conceptosIds || [])]);
+  const evitar = enunciadosPrevios([prueba, ...previas]);
+  const material = armarMaterial(docs, 12000, Math.random, vistos);
+  if (!material.conceptos) throw new Error('No queda material de esta prueba (¿borraste los PDFs?).');
+  const casosExistentes = new Set(prueba.preguntas.filter((p) => p.caso).map((p) => p.caso.id)).size;
+  const { preguntas, avisos } = await generarLote({ plan, material, evitar, signal, onProgress, desdeCaso: casosExistentes });
+  if (!preguntas.length) throw new Error('La IA no pudo crear más preguntas. Intenta de nuevo.');
+  const nueva = {
+    ...prueba,
+    preguntas: ordenarPreguntas([...prueba.preguntas, ...preguntas]),
+    conceptosIds: [...new Set([...(prueba.conceptosIds || []), ...material.ids])],
+    plan: sumaPlan(prueba.plan, plan),
+    estado: 'en curso', resultado: null, entregada: undefined, aviso: avisos.join(' '),
   };
+  return { prueba: nueva, nuevas: preguntas.map((p) => p.id) };
 }
 
 // Corrige los desarrollos pendientes. Devuelve la prueba actualizada y, si algo falló, el mensaje.

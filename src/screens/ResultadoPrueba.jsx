@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Back, Chevron } from '../icons.jsx';
 import Hoja, { Pregunta, CasoBox } from './Hoja.jsx';
+import AgregarPreguntas from './AgregarPreguntas.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { paginar, calcularPrueba, puntosDe, NOMBRES, SECCIONES, seccionDe, esLargo } from '../lib/quiz.js';
 import { formatoNota, mensajeNota } from '../lib/grade.js';
@@ -8,7 +9,8 @@ import { formatoNota, mensajeNota } from '../lib/grade.js';
 const pts = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 
 // Prueba corregida: resumen con la nota y la prueba en hojas, con las correcciones en rojo.
-export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir, onVolver, onRepetir, onOtra }) {
+export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir, onVolver, onRepetir, onOtra, onAmpliar }) {
+  const [agregar, setAgregar] = useState(false);
   const paginas = useMemo(() => paginar(prueba.preguntas), [prueba.preguntas]);
   const r = useMemo(() => calcularPrueba(prueba), [prueba]);
   const [i, setI] = useState(0);
@@ -73,11 +75,13 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
       <div style={{ maxWidth: 794, margin: '4px auto 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <button className="btn block" onClick={onOtra}>Generar otra prueba distinta</button>
         <div className="sub" style={{ textAlign: 'center', marginTop: -4 }}>Usa tu material con preguntas nuevas: parte por los conceptos que aún no practicaste y no repite estas preguntas.</div>
+        <button className="btn ghost block" onClick={() => setAgregar(true)}>Agregar más preguntas a esta prueba</button>
         <div className="two">
           <button className="btn ghost" onClick={onRepetir}>Rendir esta misma de nuevo</button>
           <button className="btn ghost" onClick={onVolver}>Volver a Pruebas</button>
         </div>
       </div>
+      {agregar && <AgregarPreguntas prueba={prueba} onAmpliar={onAmpliar} onClose={() => setAgregar(false)} />}
     </div>
   );
 }

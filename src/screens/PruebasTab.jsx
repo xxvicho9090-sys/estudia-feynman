@@ -6,7 +6,7 @@ import { formatoNota } from '../lib/grade.js';
 
 const PRESETS = [['alternativas', 'Alternativas'], ['vf', 'Verdadero o falso'], ['desarrollo', 'Desarrollo'], ['caso', 'Casos prácticos'], ['mixto', 'Mixto']];
 
-function Stepper({ etiqueta, valor, onChange, max = 99, min = 0 }) {
+export function Stepper({ etiqueta, valor, onChange, max = 99, min = 0 }) {
   return (
     <div className="stepper">
       <span>{etiqueta}</span>
@@ -34,7 +34,7 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
   const n = totalPlan(plan);
   // Qué parte de este material ya practicaste con pruebas anteriores.
   const cob = useMemo(() => cobertura(docsOrigen, pruebas.filter((x) => mismoOrigen(x.origen, { clave: origen, nombre }))), [docsOrigen, pruebas, origen, nombre]);
-  const cambiar = (tipo, v) => { setPreset('custom'); setPlan({ ...plan, [tipo]: v }); };
+  const cambiar = (tipo, v) => { setPreset('custom'); setPlan((p) => ({ ...p, [tipo]: v })); };
   const elegirPreset = (p) => { setPreset(p); setPlan({ ...presetPlan(p, Math.max(5, Math.min(n || 10, MAX_PREGUNTAS))), ...(plan.extension ? { extension: plan.extension } : {}) }); };
   const puedeCrear = planValido(plan) && mat.conceptos > 0 && hayIA();
 

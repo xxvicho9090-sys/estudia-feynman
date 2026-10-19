@@ -8,7 +8,7 @@ import RamoSheet from './screens/RamoSheet.jsx';
 import Rendir from './screens/Rendir.jsx';
 import ResultadoPrueba from './screens/ResultadoPrueba.jsx';
 import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, listarPruebas, guardarPrueba, borrarPrueba, pedirPersistencia } from './lib/db.js';
-import { crearPrueba, corregirPrueba } from './lib/pruebas.js';
+import { crearPrueba, corregirPrueba, ampliarPrueba } from './lib/pruebas.js';
 import { detectarOllama } from './lib/ai.js';
 import { iniciarAutoLocal } from './lib/autolocal.js';
 import { useLocal } from './lib/local.js';
@@ -18,7 +18,7 @@ import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo, reiniciarNotasDe, restaurarNotasDe } from './lib/ramos.js';
 import { resumenSubida } from './lib/archivos.js';
 import { docsAMover, textoMovido } from './lib/mover.js';
-import { mismoOrigen, docsDeOrigen } from './lib/quiz.js';
+import { mismoOrigen, docsDeOrigen, paginar } from './lib/quiz.js';
 import { notaDeIdeas } from './lib/grade.js';
 
 const HOME = { name: 'home' };
@@ -278,6 +278,31 @@ export default function App() {
       reemplazar({ name: 'prueba-result', pruebaId: nueva.id });
     } finally { setTrabajando(null); }
   };
+  // Agrega preguntas a una prueba ya creada. Devuelve un mensaje de error (para mostrarlo en la hoja) o null si salió bien.
+  const ampliar = async (pid, plan) => {
+    const prueba = pruebasRef.current.find((x) => x.id === pid);
+    if (!prueba) return 'No encuentro la prueba.';
+    const docsOrigen = docsDeOrigen(prueba.origen, docs, ramos);
+    abortPrueba.current = new AbortController();
+    const titulo = 'Agregando preguntas';
+    setTrabajando({ titulo, texto: 'Preparando…', fraccion: 0 });
+    try {
+      const previas = pruebasRef.current.filter((x) => x.id !== pid && mismoOrigen(x.origen, prueba.origen));
+      const { prueba: nueva, nuevas } = await ampliarPrueba({ prueba, docs: docsOrigen, plan, previas }, (texto, fraccion) => setTrabajando({ titulo, texto, fraccion }), abortPrueba.current.signal);
+      // Se abre en la hoja donde empiezan las preguntas nuevas.
+      const primera = nueva.preguntas.findIndex((q) => nuevas.includes(q.id));
+      const hoja = Math.max(0, paginar(nueva.preguntas).findIndex((pg) => pg.preguntas.some((x) => x.n === primera + 1)));
+      const guardada = { ...nueva, pagina: hoja };
+      await guardarPrueba(guardada);
+      pruebasRef.current = pruebasRef.current.map((x) => (x.id === pid ? guardada : x)); setPruebas(pruebasRef.current);
+      setToast(guardada.aviso || `${nuevas.length} ${nuevas.length === 1 ? 'pregunta agregada' : 'preguntas agregadas'}`);
+      if (screen.name === 'prueba-result') reemplazar({ name: 'rendir', pruebaId: pid });
+      return null;
+    } catch (e) {
+      if (e?.name === 'AbortError') return null;
+      return e?.message || 'No se pudieron agregar las preguntas.';
+    } finally { setTrabajando(null); }
+  };
   const abrirPrueba = (p) => ir(p.estado === 'en curso' ? { name: 'rendir', pruebaId: p.id } : { name: 'prueba-result', pruebaId: p.id });
   // "Otra prueba distinta": misma configuración y material, preguntas nuevas (y conceptos que aún no practicaste primero).
   const generarOtra = (p) => {
@@ -310,8 +335,8 @@ export default function App() {
   const c = screen.docId && concepto(screen);
   let vista;
   if (screen.name === 'settings') vista = <Settings onBack={volver} />;
-  else if (screen.name === 'rendir' && pruebaDe(screen.pruebaId)) vista = <Rendir key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} onChange={actualizarPrueba} onBack={volverAPruebas} onEntregar={() => corregir({ ...pruebaDe(screen.pruebaId), entregada: Date.now() })} />;
-  else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} onOtra={() => generarOtra(pruebaDe(screen.pruebaId))} />;
+  else if (screen.name === 'rendir' && pruebaDe(screen.pruebaId)) vista = <Rendir key={`${screen.pruebaId}:${pruebaDe(screen.pruebaId).preguntas.length}`} prueba={pruebaDe(screen.pruebaId)} onAmpliar={(plan) => ampliar(screen.pruebaId, plan)} onChange={actualizarPrueba} onBack={volverAPruebas} onEntregar={() => corregir({ ...pruebaDe(screen.pruebaId), entregada: Date.now() })} />;
+  else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} onAmpliar={(plan) => ampliar(screen.pruebaId, plan)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} onOtra={() => generarOtra(pruebaDe(screen.pruebaId))} />;
   else if (screen.name === 'explain' && c) vista = <Explain key={screen.conceptId} doc={docDe(screen.docId)} concepto={c} indice={indice(screen)} onBack={volver} onResult={(t, ev) => resultado(screen, ev)} onGo={(id) => reemplazar({ name: 'explain', docId: screen.docId, conceptId: id })} />;
   else if (screen.name === 'result' && c && screen.result) {
     const d = docDe(screen.docId);
@@ -359,7 +384,7 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div className="spin" /><b style={{ fontSize: 18 }}>{trabajando.titulo}</b></div>
             <div className="sub" style={{ marginTop: 10 }}>{trabajando.texto}</div>
             <div className="prog" style={{ marginTop: 14, height: 8 }}><i style={{ width: `${Math.round(trabajando.fraccion * 100)}%` }} /></div>
-            {trabajando.titulo.startsWith('Creando') && <button className="linkbtn" style={{ marginTop: 16 }} onClick={() => abortPrueba.current?.abort()}>Cancelar</button>}
+            {/^(Creando|Agregando)/.test(trabajando.titulo) && <button className="linkbtn" style={{ marginTop: 16 }} onClick={() => abortPrueba.current?.abort()}>Cancelar</button>}
           </div>
         </div>
       )}

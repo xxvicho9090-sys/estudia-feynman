@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Back, Chevron, List } from '../icons.jsx';
+import { Back, Chevron, List, Plus } from '../icons.jsx';
 import Hoja from './Hoja.jsx';
+import AgregarPreguntas from './AgregarPreguntas.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { paginar, contestadas } from '../lib/quiz.js';
 
 const respondida = (prueba, p) => { const r = prueba.respuestas?.[p.id]; return p.tipo === 'desarrollo' ? !!String(r || '').trim() : r !== undefined && r !== null; };
 
 // Rendir la prueba: hojas de papel que se pasan con "Hoja siguiente"; todo se guarda solo.
-export default function Rendir({ prueba, onChange, onEntregar, onBack }) {
+export default function Rendir({ prueba, onChange, onEntregar, onBack, onAmpliar }) {
+  const [agregar, setAgregar] = useState(false);
   const paginas = useMemo(() => paginar(prueba.preguntas), [prueba.preguntas]);
   const [i, setI] = useState(Math.min(prueba.pagina || 0, paginas.length - 1));
   const [lista, setLista] = useState(false);
@@ -33,6 +35,7 @@ export default function Rendir({ prueba, onChange, onEntregar, onBack }) {
           <div style={{ fontWeight: 700, fontSize: 14 }}>Respondidas {hechas} de {total}</div>
         </div>
         <BotonPantallaCompleta />
+        <button className="ibtn" aria-label="Agregar preguntas a esta prueba" title="Agregar preguntas" onClick={() => setAgregar(true)}><Plus /></button>
         <button className="ibtn" aria-label="Ver todas las preguntas" onClick={() => setLista(true)}><List /></button>
       </div>
 
@@ -46,6 +49,7 @@ export default function Rendir({ prueba, onChange, onEntregar, onBack }) {
           : <button className="btn" onClick={() => ir(i + 1)}>Hoja siguiente <Chevron /></button>}
       </nav>
 
+      {agregar && <AgregarPreguntas prueba={prueba} onAmpliar={onAmpliar} onClose={() => setAgregar(false)} />}
       {lista && (
         <div className="sheet" role="dialog" aria-modal="true" aria-label="Preguntas" onClick={(e) => { if (e.target === e.currentTarget) setLista(false); }}>
           <div>

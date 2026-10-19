@@ -258,3 +258,31 @@ export function aplanarCasos(casos, { desde = 0, nuevoId = () => Math.random().t
     caso: { id: c.id, num: desde + k + 1, titulo: c.titulo, hechos: c.hechos }, casoOrden: j,
   })));
 }
+
+// ---- Ampliar una prueba ya creada ----
+export const MAX_TOTAL = 60; // tope de preguntas de una prueba (con lo que se vaya agregando)
+
+// Deja las preguntas en el orden de una prueba: alternativas, V/F, desarrollo y casos (los casos por número, sus preguntas en orden).
+export function ordenarPreguntas(preguntas) {
+  const rango = (p) => SECCIONES.indexOf(seccionDe(p));
+  return preguntas
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => rango(a.p) - rango(b.p) || (a.p.caso && b.p.caso ? a.p.caso.num - b.p.caso.num || (a.p.casoOrden ?? 0) - (b.p.casoOrden ?? 0) : 0) || a.i - b.i)
+    .map((x) => x.p);
+}
+
+// Suma lo que se agrega al plan registrado de la prueba.
+export function sumaPlan(base = {}, extra = {}) {
+  const r = {
+    alternativas: (base.alternativas || 0) + (extra.alternativas || 0),
+    vf: (base.vf || 0) + (extra.vf || 0),
+    desarrollo: (base.desarrollo || 0) + (extra.desarrollo || 0),
+    casos: (base.casos || 0) + (extra.casos || 0),
+    porCaso: extra.casos > 0 ? extra.porCaso || POR_CASO.defecto : base.porCaso || POR_CASO.defecto,
+  };
+  const ext = extra.casos > 0 ? extra.extension : base.extension;
+  if (ext) r.extension = ext;
+  return r;
+}
+
+export const puedeAgregar = (prueba, plan) => planValido(plan) && prueba.preguntas.length + totalPlan(plan) <= MAX_TOTAL;

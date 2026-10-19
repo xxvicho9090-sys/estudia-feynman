@@ -22,6 +22,7 @@ export default function Result({ concepto, resultado, hayMas, onBack, onRetry, o
       </div>
       {resumen && <p style={{ margin: '16px 0 0', fontSize: 15, lineHeight: 1.5, color: 'var(--mut)' }}>{resumen}</p>}
 
+      <div className="cols">
       {bien.length > 0 && (
         <section className="box ok">
           <h3><Check /> Bien dicho</h3>
@@ -43,6 +44,7 @@ export default function Result({ concepto, resultado, hayMas, onBack, onRetry, o
           </ul>
         </section>
       )}
+      </div>
       <section className="ref">
         <div className="eyebrow">Lo que dice tu PDF</div>
         <p>{concepto.referencia}</p>

@@ -10,6 +10,8 @@ import ResultadoPrueba from './screens/ResultadoPrueba.jsx';
 import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, listarPruebas, guardarPrueba, borrarPrueba, pedirPersistencia } from './lib/db.js';
 import { crearPrueba, corregirPrueba } from './lib/pruebas.js';
 import { detectarOllama } from './lib/ai.js';
+import { iniciarAutoLocal } from './lib/autolocal.js';
+import { useLocal } from './lib/local.js';
 import { useActualizacion, aplicarActualizacion } from './actualizar.js';
 import { procesarPdf } from './lib/extract.js';
 import { nuevoId } from './lib/concepts.js';
@@ -38,6 +40,8 @@ export default function App() {
   const guardado = useRef({});
   const pruebasRef = useRef([]);
   const act = useActualizacion();
+  const local = useLocal();
+  const faseAntes = useRef(local.fase);
   const [aplicando, setAplicando] = useState(false);
 
   useEffect(() => {
@@ -66,6 +70,9 @@ export default function App() {
     document.addEventListener('visibilitychange', on);
     return () => document.removeEventListener('visibilitychange', on);
   }, []);
+  // La IA offline se prepara sola al abrir la app (reglas en autolocal.js) y avisa cuando está lista.
+  useEffect(() => { iniciarAutoLocal(); }, []);
+  useEffect(() => { if (faseAntes.current === 'bajando' && local.fase === 'listo') setToast('La IA offline ya está lista: funciona sin internet'); faseAntes.current = local.fase; }, [local.fase]);
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3500); return () => clearTimeout(t); } }, [toast]);
 
   // El botón "atrás" del teléfono vuelve a la pantalla anterior en vez de cerrar la app.

@@ -3,7 +3,8 @@ import { Back, Check } from '../icons.jsx';
 import { SeccionInstalar } from './Instalar.jsx';
 import { PROVEEDORES, configurado, getClave, setClave, getOllama, setOllama, estadoOllama, detectarOllama, probar, ultimoUsado, proveedor, getLocalesPrimero, setLocalesPrimero } from '../lib/ai.js';
 import { useActualizacion, buscarActualizacion, aplicarActualizacion } from '../actualizar.js';
-import { prepararLocal, borrarLocal, soporte, TAMANO } from '../lib/local.js';
+import { useLocal, descargarLocal, detenerDescarga, borrarLocal, soporte, TAMANO } from '../lib/local.js';
+import { getAutoLocal, setAutoLocal, setRechazoLocal } from '../lib/autolocal.js';
 
 const Cabecera = ({ p, conectada, texto }) => (
   <summary>
@@ -88,44 +89,41 @@ function TarjetaOllama({ p, onCambio }) {
   );
 }
 
-// IA que corre dentro de la app: se descarga una vez y queda en el dispositivo.
+// IA que corre dentro de la app: se descarga sola la primera vez (o a mano) y queda en el dispositivo.
 function TarjetaLocal({ p, onCambio }) {
   const [sop, setSop] = useState(null);
-  const [fase, setFase] = useState(configurado(p) ? 'listo' : 'inicio'); // inicio | bajando | listo
-  const [prog, setProg] = useState({ texto: '', f: 0 });
+  const l = useLocal();
   const [estado, setEstado] = useState(null);
+  const [auto, setAuto] = useState(getAutoLocal());
   useEffect(() => { soporte().then(setSop); }, []);
-  const bajar = async () => {
-    setFase('bajando'); setEstado(null); setProg({ texto: 'Preparando la descarga…', f: 0 });
-    try { await prepararLocal((texto, f) => setProg({ texto, f: f || 0 })); setFase('listo'); onCambio(); setEstado({ ok: true }); }
-    catch (e) { setFase('inicio'); setEstado({ error: `No se pudo descargar: ${String(e?.message || e).slice(0, 160)}` }); }
-  };
+  useEffect(() => { onCambio(); /* eslint-disable-next-line */ }, [l.fase]);
+  const pct = Math.round((l.f || 0) * 100);
   const probarla = async () => { setEstado('probando'); try { setEstado({ ok: true, modelo: await probar('local') }); } catch (e) { setEstado({ error: e.message }); } };
-  const borrar = async () => { await borrarLocal(); setFase('inicio'); setEstado(null); onCambio(); };
+  const listo = l.fase === 'listo';
   return (
     <details className="ia">
-      <Cabecera p={p} conectada={fase === 'listo'} texto={fase === 'bajando' ? 'Descargando…' : fase === 'listo' ? '✓ Lista' : sop && !sop.ok ? 'No disponible' : 'Sin descargar'} />
+      <Cabecera p={p} conectada={listo} texto={l.fase === 'bajando' ? `Descargando ${pct} %` : listo ? '✓ Lista' : sop && !sop.ok ? 'No disponible' : 'Sin descargar'} />
       <div className="ia-body">
-        <p className="sub" style={{ lineHeight: 1.5, margin: 0 }}>{p.desc}</p>
+        <p className="sub" style={{ lineHeight: 1.5, margin: 0 }}>{p.desc} <b style={{ color: 'var(--ink)' }}>Viene incluida: la app la descarga sola la primera vez (con Wi-Fi), para que cualquiera que reciba la app no tenga que instalar nada.</b></p>
         {sop && !sop.ok && <div className="notice">{sop.motivo}</div>}
         {sop?.ok && sop.aviso && <div className="notice info">{sop.aviso}</div>}
-        {fase === 'inicio' && sop?.ok && <>
-          <p className="sub" style={{ lineHeight: 1.5, margin: '12px 0 0', color: 'var(--ink)' }}>Descarga única de {TAMANO}. Conviene estar con Wi-Fi. Después funciona sin internet y sin límites, aunque es más lenta y menos precisa que las IAs de la nube.</p>
-          <button className="btn block" style={{ marginTop: 12 }} onClick={bajar}>Descargar la IA ({TAMANO})</button>
+        {!listo && l.fase !== 'bajando' && sop?.ok && <>
+          <p className="sub" style={{ lineHeight: 1.5, margin: '12px 0 0', color: 'var(--ink)' }}>Descarga única de {TAMANO}. Después funciona sin internet y sin límites, aunque es más lenta y menos precisa que las IAs de la nube.</p>
+          <button className="btn block" style={{ marginTop: 12 }} onClick={() => descargarLocal()}>{l.fase === 'pausada' ? 'Reanudar la descarga' : `Descargar la IA (${TAMANO})`}</button>
         </>}
-        {fase === 'bajando' && <div role="status" style={{ marginTop: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div className="spin" /><b style={{ fontSize: 14 }}>Descargando… {Math.round(prog.f * 100)} %</b></div>
-          <div className="prog" style={{ marginTop: 10, height: 8 }}><i style={{ width: `${Math.round(prog.f * 100)}%` }} /></div>
-          <div className="sub" style={{ marginTop: 8 }}>{prog.texto}</div>
-          <div className="sub" style={{ marginTop: 6 }}>No cierres esta pantalla hasta que termine.</div>
+        {l.fase === 'bajando' && <div role="status" style={{ marginTop: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}><div className="spin" /><b style={{ fontSize: 14 }}>Descargando… {pct} %</b></div>
+          <div className="prog" style={{ marginTop: 10, height: 8 }}><i style={{ width: `${pct}%` }} /></div>
+          <div className="sub" style={{ marginTop: 8 }}>{l.texto}</div>
+          <button className="linkbtn" style={{ marginTop: 8 }} onClick={detenerDescarga}>Detener</button>
         </div>}
-        {fase === 'listo' && <>
-          <div className="two" style={{ marginTop: 14 }}>
-            <button className="btn" onClick={probarla} disabled={estado === 'probando'}>{estado === 'probando' ? 'Probando…' : 'Probar'}</button>
-            <button className="btn ghost" onClick={borrar}>Borrar del dispositivo</button>
-          </div>
-        </>}
+        {l.fase === 'error' && <div className="notice" role="alert">{l.error}</div>}
+        {listo && <div className="two" style={{ marginTop: 14 }}>
+          <button className="btn" onClick={probarla} disabled={estado === 'probando'}>{estado === 'probando' ? 'Probando…' : 'Probar'}</button>
+          <button className="btn ghost" onClick={async () => { await borrarLocal(); setEstado(null); }}>Borrar del dispositivo</button>
+        </div>}
         <Estado estado={estado} />
+        <label className="check"><input type="checkbox" checked={auto} onChange={(e) => { setAuto(e.target.checked); setAutoLocal(e.target.checked); if (e.target.checked) setRechazoLocal(false); }} /> Descargarla automáticamente al abrir la app (solo con Wi-Fi)</label>
       </div>
     </details>
   );

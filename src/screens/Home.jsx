@@ -3,6 +3,8 @@ import { Gear, Plus, Folder } from '../icons.jsx';
 import RamosPanel from './RamosPanel.jsx';
 import { BannerInstalar } from './Instalar.jsx';
 import PruebasTab from './PruebasTab.jsx';
+import BannerIA from './BannerIA.jsx';
+import { useLocal } from '../lib/local.js';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { hayIA } from '../lib/ai.js';
@@ -17,6 +19,7 @@ function Notas({ docs }) {
 
 export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba }) {
   const input = useRef(null);
+  const local = useLocal();
   const [panel, setPanel] = useState(false);
   const [pendientes, setPendientes] = useState(null);
   const ramo = ramos.find((r) => r.id === sel.ramoId);
@@ -73,7 +76,8 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
         <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) setPendientes(f); }} />
         {!enPruebas && <button className="btn block up" onClick={() => input.current.click()} disabled={!!progreso}><Plus /> Subir PDF</button>}
 
-        {!enPruebas && !hayIA() && <button className="notice info" onClick={onSettings}>Falta conectar una IA gratis: sin ella no puedo sacar conceptos con precisión ni evaluarte. <b>Tocar para conectarla.</b></button>}
+        <BannerIA />
+        {!enPruebas && !hayIA() && local.fase === 'inicio' && !local.pregunta && <button className="notice info" onClick={onSettings}>Falta conectar una IA gratis: sin ella no puedo sacar conceptos con precisión ni evaluarte. <b>Tocar para conectarla.</b></button>}
         {!enPruebas && <BannerInstalar />}
         {!enPruebas && avisos.map((a) => (
           <div key={a.id} className="notice" role="status"><b>{a.doc}:</b> {a.texto} <button className="linkbtn" onClick={() => cerrarAviso(a.id)}>Entendido</button></div>

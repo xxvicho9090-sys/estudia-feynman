@@ -1,5 +1,6 @@
 import { textoDePdf, trocear } from './pdf.js';
-import { conceptosDeTexto, getKey } from './groq.js';
+import { conceptosDeTexto } from './groq.js';
+import { hayIA } from './ai.js';
 import { conceptosPorTitulos } from './heuristic.js';
 import { nuevoId, unirConceptos } from './concepts.js';
 
@@ -13,7 +14,7 @@ export async function procesarPdf(file, onProgress) {
   }
   let conceptos = [];
   let aviso = '';
-  if (getKey()) {
+  if (hayIA()) {
     const trozos = trocear(texto);
     for (let i = 0; i < trozos.length; i++) {
       onProgress?.(`La IA busca conceptos (${i + 1} de ${trozos.length})…`, 0.3 + ((i + 1) / trozos.length) * 0.7);
@@ -25,7 +26,7 @@ export async function procesarPdf(file, onProgress) {
       }
     }
   } else {
-    aviso = 'Sin clave de Groq: separé los conceptos por títulos, que es menos preciso. Revísalos o pega tu clave en Ajustes.';
+    aviso = 'Sin IA conectada: separé los conceptos por títulos, que es menos preciso. Revísalos o conecta una IA gratis en Ajustes.';
   }
   if (!conceptos.length) {
     conceptos = conceptosPorTitulos(texto);

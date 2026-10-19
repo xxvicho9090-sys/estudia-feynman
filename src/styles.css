@@ -187,3 +187,16 @@ textarea.rayas:focus-visible{outline:2px solid var(--acc);outline-offset:4px;bor
 @media print{.mesa-bar,.mesa-nav{display:none}.mesa{background:#fff;padding:0}.hoja{box-shadow:none}}
 @media (max-width:520px){.mesa-nav .btn{padding:0 12px;font-size:13px;white-space:nowrap;gap:6px}.mesa-nav .sub{white-space:nowrap}}
 .mesa-nav .btn.ghost{background:#fff}
+
+/* Tarjetas de IAs en Ajustes */
+.ias{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.ia{background:var(--card);border:1px solid var(--line);border-radius:18px}
+.ia summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:16px 18px;border-radius:18px}
+.ia summary::-webkit-details-marker{display:none}
+.ia[open] summary{border-bottom:1px solid var(--soft);border-radius:18px 18px 0 0}
+.ia-n{font-weight:800;font-size:16px}
+.ia-rol{font-size:12px;font-weight:700;color:var(--acc-d);background:var(--acc-soft);padding:3px 10px;border-radius:999px}
+.ia-est{margin-left:auto;font-size:13px;font-weight:700;color:var(--mut)}
+.ia-est.on{color:var(--ok)}
+.ia-body{padding:16px 18px 18px}
+.ia-body a{color:var(--acc-d);font-weight:600}

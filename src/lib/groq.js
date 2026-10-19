@@ -1,71 +1,8 @@
 import { extraerJson, parseEvaluacion } from './grade.js';
+import { chat, AiError } from './ai.js';
 
-const BASE = 'https://api.groq.com/openai/v1';
-const KEY = 'feynman.groqKey';
-const MODEL_KEY = 'feynman.groqModel';
-// Orden de preferencia; si el primero no está disponible para la cuenta, se prueba el siguiente.
-const PREFERIDOS = ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'llama-3.1-8b-instant', 'openai/gpt-oss-20b'];
-
-export const getKey = () => { try { return (localStorage.getItem(KEY) || '').trim(); } catch { return ''; } };
-export const setKey = (k) => { try { localStorage.setItem(KEY, k.trim()); localStorage.removeItem(MODEL_KEY); } catch { /* sin almacenamiento */ } };
-const getModel = () => { try { return localStorage.getItem(MODEL_KEY) || ''; } catch { return ''; } };
-const setModel = (m) => { try { localStorage.setItem(MODEL_KEY, m); } catch { /* sin almacenamiento */ } };
-
-export class AiError extends Error {
-  constructor(code, message) { super(message); this.code = code; }
-}
-
-const detalle = async (res) => { try { const j = await res.json(); return j?.error?.message ? ` Groq dice: ${j.error.message}` : ''; } catch { return ''; } };
-
-async function pedir(path, init) {
-  const key = getKey();
-  if (!key) throw new AiError('nokey', 'Falta la clave de Groq. Pégala en Ajustes.');
-  try {
-    return await fetch(BASE + path, { ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` } });
-  } catch (e) {
-    if (e?.name === 'AbortError') throw e;
-    throw new AiError('offline', 'No hay conexión con la IA. Revisa tu internet e intenta de nuevo.');
-  }
-}
-
-// Modelos de chat que la cuenta puede usar, en orden de preferencia.
-async function modelosDisponibles() {
-  const res = await pedir('/models', { method: 'GET' });
-  if (!res.ok) return [...PREFERIDOS];
-  const ids = ((await res.json())?.data || []).filter((m) => m.active !== false).map((m) => m.id);
-  const utiles = ids.filter((id) => !/whisper|tts|guard|prompt-guard|orpheus|playai|distil/i.test(id));
-  const orden = [...PREFERIDOS.filter((p) => utiles.includes(p)), ...utiles.filter((id) => !PREFERIDOS.includes(id))];
-  return orden.length ? orden : [...PREFERIDOS];
-}
-
-async function chatCon(model, messages, signal) {
-  return pedir('/chat/completions', { method: 'POST', signal, body: JSON.stringify({ model, temperature: 0.2, response_format: { type: 'json_object' }, messages }) });
-}
-
-async function chat(messages, { signal } = {}) {
-  let candidatos = [getModel() || PREFERIDOS[0]];
-  let res;
-  for (let i = 0; i < candidatos.length; i++) {
-    res = await chatCon(candidatos[i], messages, signal);
-    if (res.status === 404 || res.status === 400 || res.status === 403) {
-      // Modelo inexistente o sin acceso para esta cuenta: probar con los que sí tiene.
-      if (i === 0 && candidatos.length === 1) candidatos = [...new Set([...candidatos, ...(await modelosDisponibles())])];
-      if (i < candidatos.length - 1) continue;
-    }
-    if (res.ok) setModel(candidatos[i]);
-    break;
-  }
-  if (res.status === 401) throw new AiError('badkey', 'La clave de Groq no es válida. Revísala en Ajustes (debe empezar con gsk_).');
-  if (res.status === 429) throw new AiError('limit', 'Llegaste al límite gratuito de Groq. Espera un minuto e intenta de nuevo.');
-  if (!res.ok) throw new AiError('http', `La IA respondió con error (${res.status}).${await detalle(res)}`);
-  const data = await res.json();
-  return data?.choices?.[0]?.message?.content ?? '';
-}
-
-export async function probarClave() {
-  const out = await chat([{ role: 'user', content: 'Responde solo este JSON: {"ok":true}' }]);
-  if (extraerJson(out)?.ok !== true) throw new AiError('http', 'La IA no respondió como se esperaba.');
-}
+// Tareas de estudio (conceptos, evaluación, pruebas). La conexión con las IAs y el respaldo automático están en ai.js.
+export { AiError };
 
 const SYS_CONCEPTOS = `Eres un ayudante de estudio. Del texto que te doy, extrae los CONCEPTOS importantes que un estudiante debe saber explicar (definiciones, instituciones, principios, procesos). Responde SOLO JSON: {"conceptos":[{"nombre":"...","referencia":"..."}]}.
 Reglas: máximo 12 conceptos por texto; "nombre" corto (2 a 6 palabras); "referencia" = lo que dice el texto sobre ese concepto, fiel y completo, 2 a 6 frases, sin inventar nada. Si el texto no tiene conceptos, devuelve {"conceptos":[]}. Español.`;

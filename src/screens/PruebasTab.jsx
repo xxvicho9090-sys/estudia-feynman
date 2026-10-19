@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Trash } from '../icons.jsx';
-import { getKey } from '../lib/groq.js';
+import { hayIA } from '../lib/ai.js';
 import { armarMaterial, presetPlan, planValido, totalPlan, NOMBRES, TIPOS, MAX_PREGUNTAS } from '../lib/quiz.js';
 import { formatoNota } from '../lib/grade.js';
 
@@ -33,7 +33,7 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
   const n = totalPlan(plan);
   const cambiar = (tipo, v) => { setPreset('custom'); setPlan({ ...plan, [tipo]: v }); };
   const elegirPreset = (p) => { setPreset(p); setPlan(presetPlan(p, Math.max(5, Math.min(n || 10, MAX_PREGUNTAS)))); };
-  const puedeCrear = planValido(plan) && mat.conceptos > 0 && !!getKey();
+  const puedeCrear = planValido(plan) && mat.conceptos > 0 && hayIA();
 
   return (
     <>
@@ -61,7 +61,7 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
         </div>
         <div className="sub" style={{ marginTop: 10 }}>{n} {n === 1 ? 'pregunta' : 'preguntas'} en total{n > MAX_PREGUNTAS ? ` (máximo ${MAX_PREGUNTAS})` : ''}. Desarrollo vale 3 puntos; las demás, 1.</div>
 
-        {!getKey() && <div className="notice info">Para crear pruebas necesitas tu clave de Groq (Ajustes).</div>}
+        {!hayIA() && <div className="notice info">Para crear pruebas necesitas conectar una IA gratis (Ajustes).</div>}
         {errorPrueba && <div className="notice" role="alert">{errorPrueba}</div>}
         <button className="btn block" style={{ marginTop: 16 }} disabled={!puedeCrear} onClick={() => onCrear({ docs: docsOrigen, origen: { nombre }, plan })}>Crear prueba</button>
       </section>

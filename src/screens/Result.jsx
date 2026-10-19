@@ -6,21 +6,21 @@ export default function Result({ concepto, resultado, hayMas, onBack, onRetry, o
   const bien = ideas.filter((i) => i.estado === 'bien');
   const mal = ideas.filter((i) => i.estado !== 'bien');
   return (
-    <div className="app">
+    <div className="page">
       <div className="bar">
         <button className="ibtn" aria-label="Volver" onClick={onBack}><Back /></button>
-        <div className="sub">{concepto.nombre}</div>
+        <div className="crumb">{concepto.nombre}</div>
       </div>
-      <div className="grade">
+      <div className="gcard">
         <div className={'nota' + (nota < 4 ? ' bajo' : '')} aria-label={`Nota ${formatoNota(nota)} de 7`}>
           <b>{formatoNota(nota)}</b><span>de 7,0</span>
         </div>
         <div>
-          <div style={{ font: '800 24px/1.15 var(--disp)' }}>{mensajeNota(nota)}</div>
-          <div className="sub" style={{ marginTop: 8, fontSize: 14, lineHeight: 1.45 }}>Cubriste {bien.length} de {ideas.length} ideas. Aprobado desde 4,0.</div>
+          <div className="gt">{mensajeNota(nota)}</div>
+          <div className="sub" style={{ marginTop: 6, fontSize: 14 }}>Cubriste {bien.length} de {ideas.length} ideas · aprobado desde 4,0</div>
         </div>
       </div>
-      {resumen && <p style={{ margin: '16px 0 0', fontSize: 15, lineHeight: 1.5, color: 'var(--tx2)' }}>{resumen}</p>}
+      {resumen && <p style={{ margin: '16px 0 0', fontSize: 15, lineHeight: 1.5, color: 'var(--mut)' }}>{resumen}</p>}
 
       {bien.length > 0 && (
         <section className="box ok">
@@ -43,12 +43,12 @@ export default function Result({ concepto, resultado, hayMas, onBack, onRetry, o
           </ul>
         </section>
       )}
-      <section className="box ref">
+      <section className="ref">
         <div className="eyebrow">Lo que dice tu PDF</div>
         <p>{concepto.referencia}</p>
       </section>
 
-      <div className="row" style={{ marginTop: 20 }}>
+      <div className="two" style={{ marginTop: 20 }}>
         <button className="btn ghost" onClick={onRetry}>Intentar de nuevo</button>
         <button className="btn" onClick={onNext}>{hayMas ? 'Siguiente' : 'Terminar'}</button>
       </div>

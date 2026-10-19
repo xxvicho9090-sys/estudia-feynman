@@ -1,6 +1,6 @@
 :root{
-  --bg:#F4F5FA;--card:#fff;--line:#E3E6F0;--line2:#CBD0E6;--soft:#EEF0F6;
-  --ink:#141A33;--mut:#5B6385;--acc:#3347F5;--acc-d:#2536C9;--acc-soft:#E8EBFF;
+  --bg:#F2F1EF;--card:#fff;--line:#E2E0DC;--line2:#CFCBC5;--soft:#EEECE9;
+  --ink:#24211E;--mut:#6B665F;--acc:#D9480F;--acc-d:#B33A0A;--acc-soft:#FDE8DC;
   --ok:#0B7A53;--ok-bg:#E3F6EE;--ok-bar:#12A57A;--bad:#B3321B;--bad-bg:#FDECE8;--bad-bar:#E5533A;
   --f:'Plus Jakarta Sans',system-ui,sans-serif;
 }
@@ -15,8 +15,8 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .main{flex:1;min-width:0;padding:calc(env(safe-area-inset-top) + 36px) 24px 40px;max-width:900px;margin:0 auto;width:100%}
 .side{width:340px;flex:none;background:var(--card);border-left:1px solid var(--line);padding:calc(env(safe-area-inset-top) + 28px) 18px 24px;position:sticky;top:0;height:100vh;overflow:auto;display:none}
 @media (min-width:900px){.side{display:block}.main{padding:36px 44px 40px;margin:0}.only-narrow{display:none!important}}
-.drawer-bg{position:fixed;inset:0;background:rgba(20,26,51,.45);z-index:40}
-.drawer{position:fixed;top:0;right:0;bottom:0;width:min(330px,88vw);background:var(--card);z-index:41;padding:calc(env(safe-area-inset-top) + 28px) 18px 24px;overflow:auto;box-shadow:-12px 0 40px rgba(20,26,51,.18);animation:slide .22s ease-out}
+.drawer-bg{position:fixed;inset:0;background:rgba(36,33,30,.45);z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(330px,88vw);background:var(--card);z-index:41;padding:calc(env(safe-area-inset-top) + 28px) 18px 24px;overflow:auto;box-shadow:-12px 0 40px rgba(36,33,30,.18);animation:slide .22s ease-out}
 @keyframes slide{from{transform:translateX(30px);opacity:0}to{transform:none;opacity:1}}
 
 .page{max-width:620px;margin:0 auto;width:100%;padding:calc(env(safe-area-inset-top) + 28px) 20px calc(env(safe-area-inset-bottom) + 24px);display:flex;flex-direction:column;min-height:100%;animation:in .22s ease-out}
@@ -28,7 +28,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 h1{font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.025em;margin:6px 0 0}
 .stats{margin-top:8px;font-size:14px;color:var(--mut)}.stats b{color:var(--ink)}
 .head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
-.btn{height:52px;border-radius:16px;border:0;background:var(--acc);color:#fff;font-weight:700;font-size:15px;padding:0 22px;display:inline-flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 16px rgba(51,71,245,.28);transition:transform .12s}
+.btn{height:52px;border-radius:16px;border:0;background:var(--acc);color:#fff;font-weight:700;font-size:15px;padding:0 22px;display:inline-flex;align-items:center;justify-content:center;gap:10px;box-shadow:0 6px 16px rgba(217,72,15,.28);transition:transform .12s}
 .btn.ghost{background:var(--card);color:var(--ink);border:1.5px solid var(--line2);box-shadow:none}
 .btn:disabled{opacity:.55}.btn:active,.ibtn:active{transform:scale(.97)}
 .btn.block{width:100%}
@@ -43,11 +43,11 @@ h1{font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.025em;margin:
 .dot{width:10px;height:10px;border-radius:50%;flex:none}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px;margin-top:18px}
 .tile{background:var(--card);border:1px solid var(--line);border-radius:20px;padding:18px;text-align:left;display:flex;flex-direction:column;gap:10px;font-weight:700;font-size:16px;transition:box-shadow .15s,transform .12s}
-.tile:hover{box-shadow:0 8px 24px rgba(20,26,51,.08)}.tile:active{transform:scale(.985)}
+.tile:hover{box-shadow:0 8px 24px rgba(36,33,30,.08)}.tile:active{transform:scale(.985)}
 .prog{height:6px;border-radius:3px;background:var(--soft);overflow:hidden}.prog i{display:block;height:100%;background:var(--acc);border-radius:3px;transition:width .3s}
 .empty{text-align:center;color:var(--mut);padding:44px 22px;border:1.5px dashed var(--line2);border-radius:20px;margin-top:18px;line-height:1.6;background:rgba(255,255,255,.5)}
 .notice{margin-top:14px;padding:14px 16px;border-radius:16px;background:var(--bad-bg);border:1px solid #F5C9BF;color:#7A2414;font-size:14px;line-height:1.5;width:100%;text-align:left}
-.notice.info{background:var(--acc-soft);border-color:#CDD3FF;color:#1E2A8F}
+.notice.info{background:var(--acc-soft);border-color:#F8CDB4;color:#8A2F08}
 .linkbtn{background:none;border:0;padding:0;font-weight:700;text-decoration:underline;color:inherit}
 
 /* Panel de ramos */
@@ -64,7 +64,7 @@ h1{font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.025em;margin:
 textarea.exp{flex:1;min-height:220px;resize:none;border-radius:20px;border:1.5px solid var(--line2);background:var(--card);color:var(--ink);font:500 17px/1.55 var(--f);padding:18px}
 input.txt,select.txt{height:54px;width:100%;border-radius:14px;border:1.5px solid var(--line2);background:var(--card);color:var(--ink);font:500 16px var(--f);padding:0 16px}
 label.l{font-size:13px;color:var(--mut);font-weight:600;display:block;margin:0 0 8px}
-.sheet{position:fixed;inset:0;background:rgba(20,26,51,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50}
+.sheet{position:fixed;inset:0;background:rgba(36,33,30,.5);display:flex;align-items:flex-end;justify-content:center;z-index:50}
 .sheet>div{width:100%;max-width:560px;background:var(--bg);border-radius:24px 24px 0 0;padding:22px 20px calc(env(safe-area-inset-bottom) + 20px);max-height:92%;overflow:auto}
 @media (min-width:700px){.sheet{align-items:center}.sheet>div{border-radius:24px}}
 .sheet h2{margin:0 0 4px;font-size:22px;font-weight:800;letter-spacing:-.01em;text-transform:none;color:var(--ink)}
@@ -87,8 +87,8 @@ label.l{font-size:13px;color:var(--mut);font-weight:600;display:block;margin:0 0
 .box.ok h3{color:var(--ok)}.box.mal h3{color:var(--bad)}
 .box ul{margin:12px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:12px;font-size:15px;line-height:1.5}
 .box .fix{display:block;color:var(--mut);margin-top:2px}
-.ref{margin-top:14px;background:#EEF0FB;border-radius:20px;padding:18px}
+.ref{margin-top:14px;background:#EFEDEA;border-radius:20px;padding:18px}
 .ref .eyebrow{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--mut)}
-.ref p{margin:10px 0 0;font-size:15px;line-height:1.55;color:#2B3354}
+.ref p{margin:10px 0 0;font-size:15px;line-height:1.55;color:#3A3631}
 
 @media (prefers-reduced-motion:reduce){.page,.drawer,.nota{animation:none}.btn,.tile{transition:none}}

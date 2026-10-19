@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Plus, Close } from '../icons.jsx';
 import { formatoNota } from '../lib/grade.js';
-import { promedio } from '../lib/ramos.js';
+import { promedio, colorRamo } from '../lib/ramos.js';
 
 const nota = (docs) => { const p = promedio(docs); return p == null ? '—' : formatoNota(p); };
 
@@ -30,7 +30,7 @@ export default function RamosPanel({ ramos, docs, sel, onSelect, onNewRamo, onCl
             <div key={r.id}>
               <button className={'pbtn' + (sel.ramoId === r.id && !sel.docId ? ' on' : '')} aria-expanded={open}
                 onClick={() => { setAbiertos({ ...abiertos, [r.id]: sel.ramoId === r.id && !sel.docId ? !open : true }); onSelect({ ramoId: r.id }); }}>
-                <span className="dot" style={{ background: r.color }} /><span>{r.nombre}</span><span className="n">{ds.length}</span>
+                <span className="dot" style={{ background: colorRamo(ramos, r) }} /><span>{r.nombre}</span><span className="n">{ds.length}</span>
               </button>
               {open && ds.map((d) => (
                 <button key={d.id} className={'pdoc' + (sel.docId === d.id ? ' on' : '')} onClick={() => pick({ ramoId: r.id, docId: d.id })}>

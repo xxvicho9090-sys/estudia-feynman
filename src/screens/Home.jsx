@@ -3,7 +3,7 @@ import { Gear, Plus, Folder } from '../icons.jsx';
 import RamosPanel from './RamosPanel.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { getKey } from '../lib/groq.js';
-import { promedio, evaluados, totalConceptos } from '../lib/ramos.js';
+import { promedio, evaluados, totalConceptos, colorRamo } from '../lib/ramos.js';
 
 const prom = (docs) => { const p = promedio(docs); return p == null ? null : formatoNota(p); };
 
@@ -39,7 +39,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
     cabecera = <><div className="crumb">Todos mis ramos</div><h1>Qué voy a<br />explicar hoy</h1></>;
     cuerpo = !ramos.length
       ? <div className="empty">Todavía no hay nada.<br />Sube un PDF de tus apuntes, elige su ramo y saco los conceptos para que los expliques.</div>
-      : <div className="grid">{ramos.map((r) => { const ds = docs.filter((d) => d.ramoId === r.id); return <Tile key={r.id} color={r.color} titulo={r.nombre} docs={ds} extra={`${ds.length} PDFs`} onClick={() => setSel({ ramoId: r.id })} />; })}</div>;
+      : <div className="grid">{ramos.map((r) => { const ds = docs.filter((d) => d.ramoId === r.id); return <Tile key={r.id} color={colorRamo(ramos, r)} titulo={r.nombre} docs={ds} extra={`${ds.length} PDFs`} onClick={() => setSel({ ramoId: r.id })} />; })}</div>;
   }
 
   return (

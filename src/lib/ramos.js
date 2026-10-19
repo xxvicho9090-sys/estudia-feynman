@@ -1,6 +1,6 @@
 import { nuevoId } from './concepts.js';
 
-export const COLORES = ['#3347F5', '#12A594', '#F5832B', '#D6409F', '#7C4DFF', '#C99A00'];
+export const COLORES = ['#D9480F', '#6B665F', '#F08C00', '#2F6F73', '#8A5A44', '#4A4540'];
 
 export const nuevoRamo = (nombre, existentes) => ({ id: nuevoId(), nombre: nombre.trim(), color: COLORES[existentes.length % COLORES.length], creado: Date.now() });
 
@@ -12,3 +12,6 @@ export function promedio(docs) {
 
 export const evaluados = (docs) => docs.reduce((n, d) => n + d.conceptos.filter((c) => c.nota != null).length, 0);
 export const totalConceptos = (docs) => docs.reduce((n, d) => n + d.conceptos.length, 0);
+
+// El color depende de la posición del ramo, así un cambio de paleta se aplica también a los ramos ya creados.
+export const colorRamo = (ramos, r) => COLORES[Math.max(0, ramos.findIndex((x) => x.id === r.id)) % COLORES.length];

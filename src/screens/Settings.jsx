@@ -65,7 +65,7 @@ function TarjetaOllama({ p, onCambio }) {
           ? <div role="status" style={{ marginTop: 12, color: 'var(--ok)', fontWeight: 700, fontSize: 14 }}>✓ Detecté Ollama con el modelo {est.modelo}. Se usa sola cuando lo necesites.</div>
           : <div className="sub" style={{ marginTop: 12, lineHeight: 1.6, color: 'var(--ink)' }}>
             No lo encuentro ahora mismo. {cfg.apagada ? 'Está apagada abajo.' : 'Ábrelo (o instálalo desde ollama.com y ejecuta “ollama pull qwen2.5:7b”).'}<br />
-            <b>Si estás en la web</b> y Ollama está abierto, permite este sitio: define la variable de usuario <code>OLLAMA_ORIGINS</code> con <code>{location.origin}</code> y reinicia Ollama.
+            <b>Si estás en la web</b> y Ollama está abierto, permite este sitio: define la variable de usuario <code>OLLAMA_ORIGINS</code> con <code>{location.origin}</code> y reinicia Ollama. Si Chrome pregunta si este sitio puede “acceder a dispositivos de la red local”, acepta.
           </div>}
         <label className="check"><input type="checkbox" checked={!cfg.apagada} onChange={(e) => aplicar({ ...cfg, apagada: !e.target.checked })} /> Usar Ollama automáticamente</label>
         <div className="two" style={{ marginTop: 12 }}>

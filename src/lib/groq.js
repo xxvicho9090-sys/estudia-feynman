@@ -92,3 +92,30 @@ export async function evaluarExplicacion(referencia, explicacion, opts) {
   const out = await chat([{ role: 'system', content: SYS_EVAL }, { role: 'user', content: user }], opts);
   return parseEvaluacion(out);
 }
+
+// ---- Pruebas ----
+const REGLAS = `Eres profesor de Derecho en Chile y preparas pruebas para estudiantes de pregrado. Redacta con precisión jurídica y en español.
+REGLAS GENERALES: usa SOLO la información del MATERIAL (no inventes artículos, plazos, cifras ni doctrina que no aparezca); cada pregunta evalúa un concepto distinto cuando sea posible; enunciados claros, sin ambigüedad ni trampas de redacción; incluye en "concepto" el nombre del concepto del material al que se refiere; "explicacion" justifica la respuesta correcta según el material en 1-3 frases.`;
+
+const SYS_TIPO = {
+  alternativas: (n) => `${REGLAS}
+Crea EXACTAMENTE ${n} preguntas de ALTERNATIVAS (selección única). Cada una con 4 opciones plausibles y UNA sola correcta; los distractores deben ser errores típicos de estudiantes, no absurdos; evita "todas las anteriores" y "ninguna de las anteriores"; opciones de largo parecido.
+Responde SOLO JSON: {"preguntas":[{"enunciado":"...","opciones":["...","...","...","..."],"correcta":0,"explicacion":"...","concepto":"..."}]} donde "correcta" es el índice (0-3) de la opción correcta.`,
+  vf: (n) => `${REGLAS}
+Crea EXACTAMENTE ${n} afirmaciones de VERDADERO O FALSO. Mezcla verdaderas y falsas en proporción parecida (las falsas deben ser errores sutiles pero claramente falsos según el material, p. ej. cambiar un requisito, un efecto o una condición); nada de "siempre/nunca" como única pista.
+Responde SOLO JSON: {"preguntas":[{"enunciado":"afirmación","correcta":true,"explicacion":"si es falsa, indica cuál sería lo correcto","concepto":"..."}]}`,
+  desarrollo: (n) => `${REGLAS}
+Crea EXACTAMENTE ${n} preguntas de DESARROLLO (respuesta escrita de un párrafo o más), del tipo "Explique…", "Distinga…", "Señale los requisitos de…", "Analice…". Cada una con una "pauta": lista de 3 a 5 ideas clave que una buena respuesta debe contener, tomadas del material.
+Responde SOLO JSON: {"preguntas":[{"enunciado":"...","pauta":["idea clave 1","idea clave 2","idea clave 3"],"concepto":"..."}]}`,
+};
+
+export async function generarPreguntasDeTipo(tipo, n, material, opts) {
+  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n) }, { role: 'user', content: `MATERIAL:\n${material}` }], opts);
+  return extraerJson(out);
+}
+
+// Corrige una respuesta de desarrollo contra la pauta (misma salida que evaluarExplicacion).
+export function corregirDesarrollo(pregunta, respuesta, opts) {
+  const ref = `PREGUNTA: ${pregunta.enunciado}\nIDEAS QUE DEBE CONTENER UNA BUENA RESPUESTA (pauta):\n${pregunta.pauta.map((p) => `- ${p}`).join('\n')}`;
+  return evaluarExplicacion(ref, respuesta, opts);
+}

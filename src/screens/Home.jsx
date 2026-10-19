@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Gear, Plus, Folder } from '../icons.jsx';
 import RamosPanel from './RamosPanel.jsx';
 import { BannerInstalar } from './Instalar.jsx';
+import PruebasTab from './PruebasTab.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { getKey } from '../lib/groq.js';
 import { promedio, evaluados, totalConceptos, colorRamo } from '../lib/ramos.js';
@@ -13,7 +14,7 @@ function Notas({ docs }) {
   return <div className="stats">{totalConceptos(docs)} conceptos · {evaluados(docs)} evaluados{p && <> · promedio <b>{p}</b></>}</div>;
 }
 
-export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings }) {
+export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba }) {
   const input = useRef(null);
   const [panel, setPanel] = useState(false);
   const [pendientes, setPendientes] = useState(null);
@@ -43,25 +44,36 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
       : <div className="grid">{ramos.map((r) => { const ds = docs.filter((d) => d.ramoId === r.id); return <Tile key={r.id} color={colorRamo(ramos, r)} titulo={r.nombre} docs={ds} extra={`${ds.length} PDFs`} onClick={() => setSel({ ramoId: r.id })} />; })}</div>;
   }
 
+  const enPruebas = tab === 'pruebas';
+  if (enPruebas) {
+    cabecera = <><div className="crumb">Evaluación</div><h1>Pruebas</h1><div className="stats">Crea una prueba sobre tus apuntes y recibe tu nota del 1 al 7.</div></>;
+    cuerpo = <PruebasTab ramos={ramos} docs={docs} sel={sel} pruebas={pruebas} errorPrueba={errorPrueba} onCrear={onCrearPrueba} onAbrir={onAbrirPrueba} onBorrar={onBorrarPrueba} />;
+  }
+
   return (
     <div className="shell">
       <main className="main">
         <div className="head">
           <div style={{ minWidth: 0 }}>{cabecera}</div>
           <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
-            {ramo && !doc && <button className="ibtn" aria-label="Editar ramo" onClick={() => onEditRamo(ramo.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
-            {doc && <button className="ibtn" aria-label="Editar PDF y conceptos" onClick={() => onEditDoc(doc.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
+            {ramo && !doc && !enPruebas && <button className="ibtn" aria-label="Editar ramo" onClick={() => onEditRamo(ramo.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
+            {doc && !enPruebas && <button className="ibtn" aria-label="Editar PDF y conceptos" onClick={() => onEditDoc(doc.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
             <button className="ibtn" aria-label="Ajustes" onClick={onSettings}><Gear /></button>
             <button className="ibtn only-narrow" aria-label="Ver ramos y PDFs" onClick={() => setPanel(true)}><Folder /></button>
           </div>
         </div>
 
-        <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) setPendientes(f); }} />
-        <button className="btn block up" onClick={() => input.current.click()} disabled={!!progreso}><Plus /> Subir PDF</button>
+        <div className="tabs" role="tablist" aria-label="Secciones">
+          <button role="tab" aria-selected={!enPruebas} className={!enPruebas ? 'on' : ''} onClick={() => setTab('estudiar')}>Estudiar</button>
+          <button role="tab" aria-selected={enPruebas} className={enPruebas ? 'on' : ''} onClick={() => setTab('pruebas')}>Pruebas</button>
+        </div>
 
-        {!getKey() && <button className="notice info" onClick={onSettings}>Falta tu clave gratis de Groq: sin ella la IA no puede evaluarte. <b>Tocar para ponerla.</b></button>}
-        <BannerInstalar />
-        {avisos.map((a) => (
+        <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) setPendientes(f); }} />
+        {!enPruebas && <button className="btn block up" onClick={() => input.current.click()} disabled={!!progreso}><Plus /> Subir PDF</button>}
+
+        {!enPruebas && !getKey() && <button className="notice info" onClick={onSettings}>Falta tu clave gratis de Groq: sin ella la IA no puede evaluarte. <b>Tocar para ponerla.</b></button>}
+        {!enPruebas && <BannerInstalar />}
+        {!enPruebas && avisos.map((a) => (
           <div key={a.id} className="notice" role="status"><b>{a.doc}:</b> {a.texto} <button className="linkbtn" onClick={() => cerrarAviso(a.id)}>Entendido</button></div>
         ))}
         {cuerpo}

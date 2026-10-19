@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Home from './screens/Home.jsx';
 import Explain from './screens/Explain.jsx';
 import Result from './screens/Result.jsx';
 import Settings from './screens/Settings.jsx';
 import Editor from './screens/Editor.jsx';
 import RamoSheet from './screens/RamoSheet.jsx';
-import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, pedirPersistencia } from './lib/db.js';
+import Rendir from './screens/Rendir.jsx';
+import ResultadoPrueba from './screens/ResultadoPrueba.jsx';
+import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, listarPruebas, guardarPrueba, borrarPrueba, pedirPersistencia } from './lib/db.js';
+import { crearPrueba, corregirPrueba } from './lib/pruebas.js';
 import { procesarPdf } from './lib/extract.js';
 import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo } from './lib/ramos.js';
@@ -23,6 +26,14 @@ export default function App() {
   const [progreso, setProgreso] = useState(null);
   const [avisos, setAvisos] = useState([]);
   const [toast, setToast] = useState('');
+  const [tab, setTab] = useState('estudiar');
+  const [pruebas, setPruebas] = useState([]);
+  const [errorPrueba, setErrorPrueba] = useState('');
+  const [trabajando, setTrabajando] = useState(null); // { titulo, texto, fraccion } al crear o corregir una prueba
+  const [errorCorreccion, setErrorCorreccion] = useState('');
+  const abortPrueba = useRef(null);
+  const guardado = useRef({});
+  const pruebasRef = useRef([]);
   const [nueva, setNueva] = useState(null); // función que recarga con la versión nueva
 
   useEffect(() => {
@@ -38,6 +49,7 @@ export default function App() {
           ds = await Promise.all(ds.map(async (d) => (huerfanos.includes(d) ? (async () => { const n = { ...d, ramoId: base.id }; await guardarDoc(n); return n; })() : d)));
         }
         setDocs(ds); setRamos(rs);
+        const ps = await listarPruebas(); pruebasRef.current = ps; setPruebas(ps);
       } catch { setToast('No se pudo abrir el almacenamiento del dispositivo.'); }
     })();
     pedirPersistencia();
@@ -104,6 +116,55 @@ export default function App() {
     setSel({}); setRamoSheet(undefined);
   };
 
+  // ---- Pruebas ----
+  const pruebaDe = (id) => pruebas.find((p) => p.id === id);
+  // Guarda cambios de la prueba al instante en pantalla y en disco (con un pequeño retardo mientras se escribe).
+  // fn recibe la versión MÁS reciente de la prueba (así dos cambios seguidos no se pisan).
+  const actualizarPrueba = (id, fn) => {
+    const actual = pruebasRef.current.find((x) => x.id === id);
+    if (!actual) return;
+    const p = fn(actual);
+    pruebasRef.current = pruebasRef.current.map((x) => (x.id === id ? p : x));
+    setPruebas(pruebasRef.current);
+    clearTimeout(guardado.current[id]);
+    guardado.current[id] = setTimeout(() => guardarPrueba(p).catch(() => setToast('No se pudo guardar tu avance.')), 350);
+  };
+  const crearNuevaPrueba = async (cfg) => {
+    setErrorPrueba('');
+    abortPrueba.current = new AbortController();
+    setTrabajando({ titulo: 'Creando tu prueba', texto: 'Preparando…', fraccion: 0 });
+    try {
+      const p = await crearPrueba(cfg, (texto, fraccion) => setTrabajando({ titulo: 'Creando tu prueba', texto, fraccion }), abortPrueba.current.signal);
+      await guardarPrueba(p);
+      pruebasRef.current = [p, ...pruebasRef.current]; setPruebas(pruebasRef.current);
+      setTrabajando(null);
+      if (p.aviso) setToast(p.aviso);
+      ir({ name: 'rendir', pruebaId: p.id });
+    } catch (e) {
+      setTrabajando(null);
+      if (e?.name !== 'AbortError') setErrorPrueba(e?.message || 'No se pudo crear la prueba.');
+    }
+  };
+  const corregir = async (prueba) => {
+    setErrorCorreccion('');
+    abortPrueba.current = new AbortController();
+    setTrabajando({ titulo: 'Corrigiendo tu prueba', texto: 'Revisando tus respuestas…', fraccion: 0 });
+    try {
+      const { prueba: nueva, error } = await corregirPrueba(prueba, (texto, fraccion) => setTrabajando({ titulo: 'Corrigiendo tu prueba', texto, fraccion }));
+      await guardarPrueba(nueva);
+      pruebasRef.current = pruebasRef.current.map((x) => (x.id === nueva.id ? nueva : x)); setPruebas(pruebasRef.current);
+      setErrorCorreccion(error);
+      reemplazar({ name: 'prueba-result', pruebaId: nueva.id });
+    } finally { setTrabajando(null); }
+  };
+  const abrirPrueba = (p) => ir(p.estado === 'en curso' ? { name: 'rendir', pruebaId: p.id } : { name: 'prueba-result', pruebaId: p.id });
+  const rendirDeNuevo = async (p) => {
+    const copia = { ...p, id: nuevoId(), creado: Date.now(), respuestas: {}, evaluaciones: {}, estado: 'en curso', resultado: null, entregada: undefined, pagina: 0, aviso: '' };
+    await guardarPrueba(copia); pruebasRef.current = [copia, ...pruebasRef.current]; setPruebas(pruebasRef.current);
+    reemplazar({ name: 'rendir', pruebaId: copia.id });
+  };
+  const volverAPruebas = () => { setTab('pruebas'); reemplazar(HOME); };
+
   const concepto = (s) => docDe(s.docId)?.conceptos.find((c) => c.id === s.conceptId);
   const indice = (s) => { const d = docDe(s.docId); return d ? `${d.conceptos.findIndex((c) => c.id === s.conceptId) + 1} de ${d.conceptos.length}` : ''; };
 
@@ -122,6 +183,8 @@ export default function App() {
   const c = screen.docId && concepto(screen);
   let vista;
   if (screen.name === 'settings') vista = <Settings onBack={volver} />;
+  else if (screen.name === 'rendir' && pruebaDe(screen.pruebaId)) vista = <Rendir key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} onChange={actualizarPrueba} onBack={volverAPruebas} onEntregar={() => corregir({ ...pruebaDe(screen.pruebaId), entregada: Date.now() })} />;
+  else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} />;
   else if (screen.name === 'explain' && c) vista = <Explain key={screen.conceptId} doc={docDe(screen.docId)} concepto={c} indice={indice(screen)} onBack={volver} onResult={(t, ev) => resultado(screen, ev)} onGo={(id) => reemplazar({ name: 'explain', docId: screen.docId, conceptId: id })} />;
   else if (screen.name === 'result' && c && screen.result) {
     const d = docDe(screen.docId);
@@ -130,7 +193,9 @@ export default function App() {
       onRetry={() => reemplazar({ name: 'explain', docId: screen.docId, conceptId: screen.conceptId })} onNext={() => siguiente(screen)} />;
   } else vista = (
     <Home ramos={ramos} docs={docs} sel={sel} setSel={setSel} avisos={avisos} cerrarAviso={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} progreso={progreso} onFiles={subir}
-      onOpenConcept={(docId, conceptId) => ir({ name: 'explain', docId, conceptId })} onEditDoc={setEditId} onNewRamo={() => setRamoSheet(null)} onEditRamo={setRamoSheet} onSettings={() => ir({ name: 'settings' })} />
+      onOpenConcept={(docId, conceptId) => ir({ name: 'explain', docId, conceptId })} onEditDoc={setEditId} onNewRamo={() => setRamoSheet(null)} onEditRamo={setRamoSheet} onSettings={() => ir({ name: 'settings' })}
+      tab={tab} setTab={setTab} pruebas={pruebas} errorPrueba={errorPrueba} onCrearPrueba={crearNuevaPrueba} onAbrirPrueba={abrirPrueba}
+      onBorrarPrueba={async (id) => { await borrarPrueba(id); pruebasRef.current = pruebasRef.current.filter((p) => p.id !== id); setPruebas(pruebasRef.current); }} />
   );
 
   const editDoc = editId && docDe(editId);
@@ -142,6 +207,16 @@ export default function App() {
         onDeleteDoc={async () => { await borrarDoc(editDoc.id); setDocs((ds) => ds.filter((x) => x.id !== editDoc.id)); setEditId(null); setSel({ ramoId: editDoc.ramoId }); }} />}
       {ramoSheet !== undefined && <RamoSheet key={String(ramoSheet)} ramo={ramoSheet ? ramos.find((r) => r.id === ramoSheet) : null} nDocs={docs.filter((d) => d.ramoId === ramoSheet).length}
         onClose={() => setRamoSheet(undefined)} onSave={guardarRamoNuevoOEditado} onDelete={borrarRamoYDocs} />}
+      {trabajando && (
+        <div className="sheet" role="alertdialog" aria-label={trabajando.titulo}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div className="spin" /><b style={{ fontSize: 18 }}>{trabajando.titulo}</b></div>
+            <div className="sub" style={{ marginTop: 10 }}>{trabajando.texto}</div>
+            <div className="prog" style={{ marginTop: 14, height: 8 }}><i style={{ width: `${Math.round(trabajando.fraccion * 100)}%` }} /></div>
+            {trabajando.titulo.startsWith('Creando') && <button className="linkbtn" style={{ marginTop: 16 }} onClick={() => abortPrueba.current?.abort()}>Cancelar</button>}
+          </div>
+        </div>
+      )}
       {nueva && <div className="toast" role="status" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>Hay una versión nueva <button className="linkbtn" style={{ color: '#FFB48A' }} onClick={nueva}>Actualizar</button></div>}
       {toast && !nueva && <div className="toast" role="status">{toast}</div>}
     </>

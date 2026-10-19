@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Back, Check } from '../icons.jsx';
+import { SeccionInstalar } from './Instalar.jsx';
 import { getKey, setKey, probarClave } from '../lib/groq.js';
 
 export default function Settings({ onBack }) {
@@ -26,7 +27,8 @@ export default function Settings({ onBack }) {
         {estado === 'ok' && <div role="status" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 14, color: 'var(--ok)' }}><Check /> Conectada: la IA respondió bien</div>}
         {estado?.error && <div className="notice" role="alert">{estado.error}</div>}
       </div>
-      <section className="card" style={{ marginTop: 28 }}>
+      <SeccionInstalar />
+      <section className="card" style={{ marginTop: 14 }}>
         <div style={{ fontWeight: 800, fontSize: 16 }}>¿Cómo la consigo?</div>
         <ol style={{ margin: '10px 0 0', paddingLeft: 20, fontSize: 15, lineHeight: 1.7, color: 'var(--ink)' }}>
           <li>Entra a console.groq.com</li>

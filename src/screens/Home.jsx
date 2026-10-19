@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Gear, Plus, Folder } from '../icons.jsx';
 import RamosPanel from './RamosPanel.jsx';
+import { BannerInstalar } from './Instalar.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { getKey } from '../lib/groq.js';
 import { promedio, evaluados, totalConceptos, colorRamo } from '../lib/ramos.js';
@@ -59,6 +60,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
         <button className="btn block up" onClick={() => input.current.click()} disabled={!!progreso}><Plus /> Subir PDF</button>
 
         {!getKey() && <button className="notice info" onClick={onSettings}>Falta tu clave gratis de Groq: sin ella la IA no puede evaluarte. <b>Tocar para ponerla.</b></button>}
+        <BannerInstalar />
         {avisos.map((a) => (
           <div key={a.id} className="notice" role="status"><b>{a.doc}:</b> {a.texto} <button className="linkbtn" onClick={() => cerrarAviso(a.id)}>Entendido</button></div>
         ))}

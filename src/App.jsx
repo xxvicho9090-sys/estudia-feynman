@@ -23,6 +23,7 @@ export default function App() {
   const [progreso, setProgreso] = useState(null);
   const [avisos, setAvisos] = useState([]);
   const [toast, setToast] = useState('');
+  const [nueva, setNueva] = useState(null); // función que recarga con la versión nueva
 
   useEffect(() => {
     (async () => {
@@ -41,6 +42,7 @@ export default function App() {
     })();
     pedirPersistencia();
   }, []);
+  useEffect(() => { const on = (e) => setNueva(() => e.detail); addEventListener('feynman-update', on); return () => removeEventListener('feynman-update', on); }, []);
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3500); return () => clearTimeout(t); } }, [toast]);
 
   // El botón "atrás" del teléfono vuelve a la pantalla anterior en vez de cerrar la app.
@@ -140,7 +142,8 @@ export default function App() {
         onDeleteDoc={async () => { await borrarDoc(editDoc.id); setDocs((ds) => ds.filter((x) => x.id !== editDoc.id)); setEditId(null); setSel({ ramoId: editDoc.ramoId }); }} />}
       {ramoSheet !== undefined && <RamoSheet key={String(ramoSheet)} ramo={ramoSheet ? ramos.find((r) => r.id === ramoSheet) : null} nDocs={docs.filter((d) => d.ramoId === ramoSheet).length}
         onClose={() => setRamoSheet(undefined)} onSave={guardarRamoNuevoOEditado} onDelete={borrarRamoYDocs} />}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {nueva && <div className="toast" role="status" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>Hay una versión nueva <button className="linkbtn" style={{ color: '#FFB48A' }} onClick={nueva}>Actualizar</button></div>}
+      {toast && !nueva && <div className="toast" role="status">{toast}</div>}
     </>
   );
 }

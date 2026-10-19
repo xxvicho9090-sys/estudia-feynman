@@ -1,6 +1,6 @@
 {
   "name": "estudia-con-feynman",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,6 +21,7 @@
     "@capacitor/cli": "^8.5.0",
     "@vitejs/plugin-react": "^4.3.4",
     "fflate": "^0.8.2",
+    "sharp": "^0.35.5",
     "vite": "^5.4.21"
   }
 }

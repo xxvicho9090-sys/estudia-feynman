@@ -1,13 +1,17 @@
-// Capa de IA con varios proveedores gratuitos y respaldo automático:
-// si uno llega a su límite (o falla), la app usa el siguiente que tengas conectado.
+// Capa de IA con varios proveedores y respaldo automático:
+// si uno llega a su límite (o falla), la app usa el siguiente que tengas disponible.
+// En la nube (gratis): Groq, Gemini, Cerebras, Mistral, OpenRouter. Sin internet: Ollama (tu computador) y la IA dentro de la app.
 // Todos los datos (claves, modelos) quedan solo en este dispositivo.
+import { chatLocal, localListo } from './local.js';
+import { ESQ_PRUEBA } from './esquemas.js';
 
 export class AiError extends Error {
   constructor(code, message) { super(message); this.code = code; }
 }
 
 const MIN = 60 * 1000;
-const NO_JSON = /embed|moderation|ocr|whisper|tts|guard|orpheus|playai|transcribe|rerank|safety|image|vision-only/i;
+const NO_CHAT = /embed|moderation|ocr|whisper|tts|guard|orpheus|playai|transcribe|rerank|safety|image|vision-only/i;
+const SOLO_ESPANOL = '\n\nIMPORTANTE: responde únicamente en español (alfabeto latino), sin otros idiomas ni caracteres extraños, y solo con el JSON pedido.';
 
 // Orden = prioridad. "pref" ordena los modelos descubiertos; "defecto" se usa si no se puede listar.
 export const PROVEEDORES = [
@@ -26,9 +30,11 @@ export const PROVEEDORES = [
   { id: 'openrouter', nombre: 'OpenRouter', tipo: 'openai', base: 'https://openrouter.ai/api/v1', clave: true, prefijo: 'sk-or-', soloGratis: true,
     pref: [/gemma-4-31b/, /nemotron-3-super/, /gemma-4-26b/, /minimax/, /llama-3\.3-70b/, /deepseek/, /qwen/], defecto: ['google/gemma-4-31b-it:free'],
     rol: 'Respaldo (muchos modelos)', desc: 'Usa modelos gratuitos (:free) de varias empresas. Algo más lenta.', url: 'openrouter.ai/keys', pasos: 'Crea una cuenta gratis y una clave en “Keys”.' },
-  { id: 'ollama', nombre: 'Ollama (en tu laptop)', tipo: 'openai', base: 'http://localhost:11434/v1', clave: false, local: true,
-    pref: [], defecto: [],
-    rol: 'Sin internet', desc: 'Corre en tu propio computador: gratis, privado y sin límites. Necesita Ollama instalado.', url: 'ollama.com', pasos: 'Instala Ollama, ejecuta “ollama pull qwen2.5:7b” y deja Ollama abierto. Para usarlo desde la web: define la variable OLLAMA_ORIGINS con * y reinicia Ollama.' },
+  { id: 'ollama', nombre: 'Ollama (tu computador)', tipo: 'ollama', local: true, auto: true, maxChars: 9000,
+    pref: [/qwen2\.5.*(32b|14b|7b)/, /llama3\.[123]/, /gemma[23]/, /qwen|mistral|phi/],
+    rol: 'Automática, sin internet', desc: 'Corre en tu propio computador: gratis, privado y sin límites. Se detecta sola cuando Ollama está abierto. Más lenta y menos precisa que las de la nube.', url: 'ollama.com', pasos: 'Instala Ollama y ejecuta “ollama pull qwen2.5:7b” una vez.' },
+  { id: 'local', nombre: 'IA dentro de la app', tipo: 'webllm', local: true, maxChars: 6500,
+    rol: 'Sin internet, para todos', desc: 'Una IA que se descarga una sola vez y corre en este dispositivo, sin cuentas ni claves. Necesita un computador o tablet reciente con WebGPU.', url: '', pasos: '' },
 ];
 export const proveedor = (id) => PROVEEDORES.find((p) => p.id === id);
 
@@ -38,11 +44,45 @@ const kClave = (id) => (id === 'groq' ? 'feynman.groqKey' : `feynman.key.${id}`)
 const kModelo = (id) => `feynman.model.${id}`;
 export const getClave = (id) => ls.get(kClave(id)).trim();
 export const setClave = (id, v) => { ls.set(kClave(id), String(v || '').trim()); ls.set(kModelo(id), ''); enfriar.delete(id); };
-export const getOllama = () => ({ url: ls.get('feynman.ollamaUrl') || proveedor('ollama').base, modelo: ls.get('feynman.ollamaModel') });
-export const setOllama = ({ url, modelo }) => { ls.set('feynman.ollamaUrl', String(url || '').trim()); ls.set('feynman.ollamaModel', String(modelo || '').trim()); enfriar.delete('ollama'); };
-export const configurado = (p) => (p.local ? !!getOllama().modelo : !!getClave(p.id));
+
+export const getOllama = () => ({ url: (ls.get('feynman.ollamaUrl') || 'http://localhost:11434').replace(/\/+$/, '').replace(/\/v1$/, ''), modelo: ls.get('feynman.ollamaModel'), apagada: ls.get('feynman.ollamaOff') === '1' });
+export const setOllama = ({ url, modelo, apagada }) => {
+  if (url !== undefined) ls.set('feynman.ollamaUrl', String(url || '').trim());
+  if (modelo !== undefined) ls.set('feynman.ollamaModel', String(modelo || '').trim());
+  if (apagada !== undefined) ls.set('feynman.ollamaOff', apagada ? '1' : '');
+  det.ollama = { ok: false, modelo: '', modelos: [], hasta: 0 };
+};
+export const getLocalesPrimero = () => ls.get('feynman.localesPrimero') === '1';
+export const setLocalesPrimero = (v) => ls.set('feynman.localesPrimero', v ? '1' : '');
+
+export const configurado = (p) => (p.id === 'ollama' ? det.ollama.ok : p.id === 'local' ? localListo() : !!getClave(p.id));
 export const hayIA = () => PROVEEDORES.some(configurado);
 export const proveedoresConfigurados = () => PROVEEDORES.filter(configurado);
+
+// ---- Detección automática de Ollama ----
+const det = { ollama: { ok: false, modelo: '', modelos: [], hasta: 0 } };
+export const estadoOllama = () => det.ollama;
+function mejorModelo(nombres) {
+  const p = proveedor('ollama');
+  for (const r of p.pref) { const m = nombres.find((n) => r.test(n)); if (m) return m; }
+  return nombres[0] || '';
+}
+export async function detectarOllama(forzar = false) {
+  const ahora = Date.now();
+  const { url, modelo: pedido, apagada } = getOllama();
+  if (apagada) { det.ollama = { ok: false, modelo: '', modelos: [], hasta: ahora + MIN }; return false; }
+  if (!forzar && ahora < det.ollama.hasta) return det.ollama.ok;
+  const ac = new AbortController();
+  const t = setTimeout(() => ac.abort(), 1500);
+  try {
+    const r = await fetch(`${url}/api/tags`, { signal: ac.signal });
+    const j = await r.json();
+    const nombres = (j.models || []).map((m) => m.name).filter((n) => !/embed/i.test(n));
+    const elegido = nombres.includes(pedido) ? pedido : mejorModelo(nombres);
+    det.ollama = { ok: !!elegido, modelo: elegido, modelos: nombres, hasta: ahora + MIN };
+  } catch { det.ollama = { ok: false, modelo: '', modelos: [], hasta: ahora + 30 * 1000 }; } finally { clearTimeout(t); }
+  return det.ollama.ok;
+}
 
 // ---- Transporte ----
 const enfriar = new Map(); // proveedor → hasta cuándo se evita (límite alcanzado)
@@ -52,7 +92,7 @@ export const ultimoUsado = () => ultimo;
 async function http(p, url, init, signal) {
   try { return await fetch(url, { ...init, signal }); } catch (e) {
     if (e?.name === 'AbortError') throw e;
-    throw new AiError('offline', p.local ? `No pude conectar con Ollama en ${getOllama().url}. ¿Está abierto y permite este sitio (OLLAMA_ORIGINS)?` : `No hay conexión con ${p.nombre}. Revisa tu internet.`);
+    throw new AiError('offline', p.id === 'ollama' ? `No pude conectar con Ollama en ${getOllama().url}. ¿Está abierto?` : `No hay conexión con ${p.nombre}. Revisa tu internet.`);
   }
 }
 const detalle = async (res) => { try { const j = await res.json(); const m = j?.error?.message || j?.error || j?.message || j?.detail; return m ? ` ${typeof m === 'string' ? m : JSON.stringify(m)}`.slice(0, 220) : ''; } catch { return ''; } };
@@ -63,14 +103,14 @@ const errorDe = async (p, res) => {
 };
 
 function ordenar(p, ids) {
-  const utiles = ids.filter((id) => !NO_JSON.test(id));
+  const utiles = ids.filter((id) => !NO_CHAT.test(id));
   const rank = (id) => { const i = p.pref.findIndex((r) => r.test(id)); return i < 0 ? 99 : i; };
   return [...utiles].sort((a, b) => rank(a) - rank(b));
 }
 
 async function listar(p, signal) {
-  const headers = p.tipo === 'gemini' ? { 'x-goog-api-key': getClave(p.id) } : p.clave ? { Authorization: `Bearer ${getClave(p.id)}` } : {};
-  const res = await http(p, p.tipo === 'gemini' ? `${p.base}/models?pageSize=200` : `${(p.local ? getOllama().url : p.base).replace(/\/$/, '')}/models`, { headers }, signal).catch(() => null);
+  const headers = p.tipo === 'gemini' ? { 'x-goog-api-key': getClave(p.id) } : { Authorization: `Bearer ${getClave(p.id)}` };
+  const res = await http(p, p.tipo === 'gemini' ? `${p.base}/models?pageSize=200` : `${p.base}/models`, { headers }, signal).catch(() => null);
   if (!res?.ok) return [...p.defecto];
   const j = await res.json().catch(() => ({}));
   let ids;
@@ -85,10 +125,9 @@ async function listar(p, signal) {
 }
 
 async function llamarOpenAI(p, modelo, messages, signal, conJson = true) {
-  const base = (p.local ? getOllama().url : p.base).replace(/\/$/, '');
-  const headers = { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${getClave(p.id)}` } : {}) };
+  const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${getClave(p.id)}` };
   const body = { model: modelo, temperature: 0.2, messages, ...(conJson ? { response_format: { type: 'json_object' } } : {}) };
-  return http(p, `${base}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) }, signal);
+  return http(p, `${p.base}/chat/completions`, { method: 'POST', headers, body: JSON.stringify(body) }, signal);
 }
 
 async function llamarGemini(p, modelo, messages, signal) {
@@ -101,17 +140,41 @@ async function llamarGemini(p, modelo, messages, signal) {
   return http(p, `${p.base}/models/${modelo}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': getClave(p.id) }, body: JSON.stringify(body) }, signal);
 }
 
+// Los modelos locales son chicos: se les recorta el texto largo y se refuerza el idioma.
+function paraLocal(p, messages) {
+  return messages.map((m, i) => {
+    if (m.role === 'system') return { ...m, content: m.content + SOLO_ESPANOL };
+    return m.content.length > p.maxChars ? { ...m, content: m.content.slice(0, p.maxChars) + '\n[…texto recortado por límite de memoria]' } : m;
+  }).map((m, i, a) => (i === a.length - 1 && !a.some((x) => x.role === 'system') ? { ...m, content: m.content + SOLO_ESPANOL } : m));
+}
+
 async function textoDe(p, res) {
   const j = await res.json();
   if (p.tipo === 'gemini') return (j?.candidates?.[0]?.content?.parts || []).map((x) => x.text || '').join('');
+  if (p.tipo === 'ollama') return j?.message?.content ?? '';
   return j?.choices?.[0]?.message?.content ?? '';
 }
 
 // Una consulta a UN proveedor, probando otros modelos de su lista si el elegido no existe o no está permitido.
-async function consultar(p, messages, signal) {
+async function consultar(p, messages, signal, esquema) {
+  if (p.tipo === 'webllm') {
+    try { return await chatLocal(paraLocal(p, messages), signal, esquema); } catch (e) {
+      if (e?.name === 'AbortError') throw e;
+      throw new AiError('http', `La IA dentro de la app falló: ${String(e?.message || e).slice(0, 160)}`);
+    }
+  }
+  if (p.tipo === 'ollama') {
+    const modelo = det.ollama.modelo || getOllama().modelo;
+    if (!modelo) throw new AiError('nokey', 'Ollama no tiene ningún modelo instalado.');
+    const { url } = getOllama();
+    const body = { model: modelo, stream: false, format: esquema || 'json', options: { temperature: 0.2, num_ctx: 8192 }, messages: paraLocal(p, messages) };
+    const res = await http(p, `${url}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, signal);
+    if (!res.ok) throw await errorDe(p, res);
+    return textoDe(p, res);
+  }
   const cache = ls.get(kModelo(p.id));
-  let candidatos = p.local ? [getOllama().modelo] : cache ? [cache] : await listar(p, signal);
-  let descubierto = !p.local && !cache;
+  let candidatos = cache ? [cache] : await listar(p, signal);
+  let descubierto = !cache;
   let ultimoRes = null;
   for (let i = 0; i < candidatos.length; i++) {
     const m = candidatos[i];
@@ -121,7 +184,7 @@ async function consultar(p, messages, signal) {
     if (res.ok) { ls.set(kModelo(p.id), m); return textoDe(p, res); }
     ultimoRes = res;
     if ([404, 400, 403, 422].includes(res.status) && !(p.id === 'gemini' && /api key/i.test(await detalle(res.clone())))) {
-      if (!descubierto && !p.local) { candidatos = [...new Set([...candidatos, ...(await listar(p, signal))])]; descubierto = true; }
+      if (!descubierto) { candidatos = [...new Set([...candidatos, ...(await listar(p, signal))])]; descubierto = true; }
       if (i < candidatos.length - 1) continue;
     }
     break;
@@ -130,15 +193,21 @@ async function consultar(p, messages, signal) {
 }
 
 // Consulta con respaldo automático entre proveedores.
-export async function chat(messages, { signal } = {}) {
+export async function chat(messages, { signal, esquema } = {}) {
+  await detectarOllama();
   const lista = proveedoresConfigurados();
   if (!lista.length) throw new AiError('nokey', 'Falta conectar una IA. Pega una clave gratis en Ajustes.');
+  const sinInternet = typeof navigator !== 'undefined' && navigator.onLine === false;
+  const nube = lista.filter((p) => !p.local);
+  const locales = lista.filter((p) => p.local);
+  let orden = (getLocalesPrimero() || sinInternet) ? [...locales, ...nube] : [...nube, ...locales];
+  if (sinInternet && locales.length) orden = orden.filter((p) => p.local); // sin internet la nube ni se intenta
   const ahora = Date.now();
-  const orden = [...lista.filter((p) => (enfriar.get(p.id) || 0) <= ahora), ...lista.filter((p) => (enfriar.get(p.id) || 0) > ahora)];
+  orden = [...orden.filter((p) => (enfriar.get(p.id) || 0) <= ahora), ...orden.filter((p) => (enfriar.get(p.id) || 0) > ahora)];
   const fallos = [];
   for (const p of orden) {
     try {
-      const out = await consultar(p, messages, signal);
+      const out = await consultar(p, messages, signal, esquema);
       ultimo = p.id;
       return out;
     } catch (e) {
@@ -156,12 +225,14 @@ export async function chat(messages, { signal } = {}) {
 // Prueba un proveedor concreto (botón "Guardar y probar" de Ajustes).
 export async function probar(id) {
   const p = proveedor(id);
-  if (!configurado(p)) throw new AiError('nokey', p.local ? 'Escribe el nombre del modelo de Ollama.' : 'Pega la clave primero.');
-  const out = await consultar(p, [{ role: 'user', content: 'Responde solo este JSON: {"ok":true}' }]);
+  if (p.id === 'ollama') { if (!(await detectarOllama(true))) throw new AiError('offline', `No encuentro Ollama en ${getOllama().url}. Ábrelo y revisa que tenga un modelo instalado.`); }
+  else if (!configurado(p)) throw new AiError('nokey', 'Pega la clave primero.');
+  const out = await consultar(p, [{ role: 'user', content: 'Responde solo este JSON: {"ok":true}' }], undefined, ESQ_PRUEBA);
   const a = out.indexOf('{'), b = out.lastIndexOf('}');
   let ok = false;
   try { ok = JSON.parse(out.slice(a, b + 1)).ok === true; } catch { /* respuesta no JSON */ }
   if (!ok) throw new AiError('http', `${p.nombre} respondió, pero no en el formato esperado. Prueba con otro modelo.`);
   enfriar.delete(id);
-  return ls.get(kModelo(id));
+  ultimo = id;
+  return p.id === 'ollama' ? det.ollama.modelo : ls.get(kModelo(id));
 }

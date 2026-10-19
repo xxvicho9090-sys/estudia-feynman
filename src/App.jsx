@@ -9,6 +9,7 @@ import Rendir from './screens/Rendir.jsx';
 import ResultadoPrueba from './screens/ResultadoPrueba.jsx';
 import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, listarPruebas, guardarPrueba, borrarPrueba, pedirPersistencia } from './lib/db.js';
 import { crearPrueba, corregirPrueba } from './lib/pruebas.js';
+import { detectarOllama } from './lib/ai.js';
 import { procesarPdf } from './lib/extract.js';
 import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo } from './lib/ramos.js';
@@ -26,6 +27,7 @@ export default function App() {
   const [progreso, setProgreso] = useState(null);
   const [avisos, setAvisos] = useState([]);
   const [toast, setToast] = useState('');
+  const [, redibujar] = useState(0);
   const [tab, setTab] = useState('estudiar');
   const [pruebas, setPruebas] = useState([]);
   const [errorPrueba, setErrorPrueba] = useState('');
@@ -55,6 +57,14 @@ export default function App() {
     pedirPersistencia();
   }, []);
   useEffect(() => { const on = (e) => setNueva(() => e.detail); addEventListener('feynman-update', on); return () => removeEventListener('feynman-update', on); }, []);
+  // Ollama se detecta solo al abrir la app y cada vez que vuelves a ella.
+  useEffect(() => {
+    const buscar = () => detectarOllama().then(() => redibujar((x) => x + 1));
+    buscar();
+    const on = () => { if (document.visibilityState === 'visible') buscar(); };
+    document.addEventListener('visibilitychange', on);
+    return () => document.removeEventListener('visibilitychange', on);
+  }, []);
   useEffect(() => { if (toast) { const t = setTimeout(() => setToast(''), 3500); return () => clearTimeout(t); } }, [toast]);
 
   // El botón "atrás" del teléfono vuelve a la pantalla anterior en vez de cerrar la app.

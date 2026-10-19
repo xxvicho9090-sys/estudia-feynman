@@ -1,5 +1,6 @@
 import { extraerJson, parseEvaluacion } from './grade.js';
 import { chat, AiError } from './ai.js';
+import { ESQ_CONCEPTOS, ESQ_EVALUACION, ESQ_TIPO } from './esquemas.js';
 
 // Tareas de estudio (conceptos, evaluación, pruebas). La conexión con las IAs y el respaldo automático están en ai.js.
 export { AiError };
@@ -8,7 +9,7 @@ const SYS_CONCEPTOS = `Eres un ayudante de estudio. Del texto que te doy, extrae
 Reglas: máximo 12 conceptos por texto; "nombre" corto (2 a 6 palabras); "referencia" = lo que dice el texto sobre ese concepto, fiel y completo, 2 a 6 frases, sin inventar nada. Si el texto no tiene conceptos, devuelve {"conceptos":[]}. Español.`;
 
 export async function conceptosDeTexto(texto, opts) {
-  const out = await chat([{ role: 'system', content: SYS_CONCEPTOS }, { role: 'user', content: texto }], opts);
+  const out = await chat([{ role: 'system', content: SYS_CONCEPTOS }, { role: 'user', content: texto }], { ...opts, esquema: ESQ_CONCEPTOS });
   const lista = extraerJson(out)?.conceptos;
   if (!Array.isArray(lista)) return [];
   return lista
@@ -26,7 +27,7 @@ Reglas: juzga SOLO con el material dado, no con tu conocimiento externo; no prem
 
 export async function evaluarExplicacion(referencia, explicacion, opts) {
   const user = `MATERIAL:\n${referencia}\n\nEXPLICACIÓN DEL ESTUDIANTE:\n${explicacion}`;
-  const out = await chat([{ role: 'system', content: SYS_EVAL }, { role: 'user', content: user }], opts);
+  const out = await chat([{ role: 'system', content: SYS_EVAL }, { role: 'user', content: user }], { ...opts, esquema: ESQ_EVALUACION });
   return parseEvaluacion(out);
 }
 
@@ -47,7 +48,7 @@ Responde SOLO JSON: {"preguntas":[{"enunciado":"...","pauta":["idea clave 1","id
 };
 
 export async function generarPreguntasDeTipo(tipo, n, material, opts) {
-  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n) }, { role: 'user', content: `MATERIAL:\n${material}` }], opts);
+  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n) }, { role: 'user', content: `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
   return extraerJson(out);
 }
 

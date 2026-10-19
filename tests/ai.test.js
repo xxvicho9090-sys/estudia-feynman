@@ -111,17 +111,88 @@ test('sin conexión: error "offline" y pasa al siguiente', async () => {
   assert.equal(await ai.chat(msgs), '{"ok":true}');
 });
 
-test('Ollama local: necesita modelo, usa su URL y no manda clave', async () => {
-  reset();
+test('Ollama: se detecta sola, elige el mejor modelo y usa la API nativa con num_ctx y JSON', async () => {
+  reset(); ai.setOllama({ url: '', modelo: '', apagada: false });
   assert.equal(ai.configurado(ai.proveedor('ollama')), false);
-  ai.setOllama({ url: 'http://192.168.1.20:11434/v1/', modelo: 'qwen2.5:7b' });
+  handler = async (u, init) => {
+    if (u.endsWith('/api/tags')) return json({ models: [{ name: 'nomic-embed-text:latest' }, { name: 'phi3:mini' }, { name: 'qwen2.5:7b-instruct-q4_K_M' }] });
+    if (u.endsWith('/api/chat')) return json({ message: { content: '{"ok":true}' } });
+    return json({}, 404);
+  };
+  assert.equal(await ai.detectarOllama(true), true);
+  assert.equal(ai.estadoOllama().modelo, 'qwen2.5:7b-instruct-q4_K_M'); // ni embedding ni el más chico
   assert.equal(ai.configurado(ai.proveedor('ollama')), true);
-  let visto;
-  handler = async (u, init) => { visto = { u, init }; return openai('{"ok":true}'); };
+  assert.equal(await ai.chat(msgs), '{"ok":true}');
+  const c = llamadas.find((l) => l.url.endsWith('/api/chat'));
+  assert.equal(c.url, 'http://localhost:11434/api/chat');
+  assert.equal(c.body.format, 'json');
+  assert.equal(c.body.stream, false);
+  assert.equal(c.body.options.num_ctx, 8192);
+  assert.match(c.body.messages[0].content, /español/); // refuerzo de idioma para modelos chicos
+  assert.equal(ai.ultimoUsado(), 'ollama');
+});
+
+test('Ollama: sin servidor no se detecta (y no rompe nada); se puede apagar', async () => {
+  reset(); ai.setOllama({ url: '', modelo: '', apagada: false });
+  handler = async () => { throw new TypeError('connection refused'); };
+  assert.equal(await ai.detectarOllama(true), false);
+  assert.equal(ai.hayIA(), false);
+  handler = async (u) => json({ models: [{ name: 'llama3.2:3b' }] });
+  assert.equal(await ai.detectarOllama(true), true);
+  ai.setOllama({ apagada: true });
+  assert.equal(await ai.detectarOllama(true), false); // apagada: ni se consulta
+  ai.setOllama({ apagada: false });
+});
+
+test('Ollama: respeta el modelo pedido y con URL /v1 antigua la corrige', async () => {
+  reset(); ai.setOllama({ url: 'http://192.168.1.20:11434/v1/', modelo: 'gemma2:9b', apagada: false });
+  assert.equal(ai.getOllama().url, 'http://192.168.1.20:11434');
+  let pedido;
+  handler = async (u) => { pedido = u; return json({ models: [{ name: 'qwen2.5:7b' }, { name: 'gemma2:9b' }] }); };
+  await ai.detectarOllama(true);
+  assert.equal(pedido, 'http://192.168.1.20:11434/api/tags');
+  assert.equal(ai.estadoOllama().modelo, 'gemma2:9b');
+  ai.setOllama({ url: '', modelo: '' });
+});
+
+test('nube con límite + Ollama detectada: cae a Ollama automáticamente', async () => {
+  reset(); ai.setOllama({ url: '', modelo: '', apagada: false }); ai.setClave('groq', 'gsk_x');
+  handler = async (u) => {
+    if (u.includes('groq.com')) return u.endsWith('/models') ? json({ data: [] }) : json({}, 429);
+    if (u.endsWith('/api/tags')) return json({ models: [{ name: 'qwen2.5:7b' }] });
+    return json({ message: { content: '{"de":"ollama"}' } });
+  };
+  await ai.detectarOllama(true);
+  assert.equal(await ai.chat(msgs), '{"de":"ollama"}');
+  assert.equal(ai.ultimoUsado(), 'ollama');
+});
+
+test('"Usar primero las locales": Ollama va antes que la nube', async () => {
+  reset(); ai.setOllama({ url: '', modelo: '', apagada: false }); ai.setClave('groq', 'gsk_x'); ai.setLocalesPrimero(true);
+  handler = async (u) => (u.endsWith('/api/tags') ? json({ models: [{ name: 'qwen2.5:7b' }] }) : u.endsWith('/api/chat') ? json({ message: { content: '{"ok":true}' } }) : json({ error: {} }, 500));
+  await ai.detectarOllama(true);
   await ai.chat(msgs);
-  assert.equal(visto.u, 'http://192.168.1.20:11434/v1/chat/completions');
-  assert.equal(visto.init.headers.Authorization, undefined);
-  assert.equal(JSON.parse(visto.init.body).model, 'qwen2.5:7b');
+  assert.equal(ai.ultimoUsado(), 'ollama');
+  assert.equal(llamadas.filter((l) => l.url.includes('groq.com')).length, 0);
+  ai.setLocalesPrimero(false);
+});
+
+test('IA dentro de la app: se considera lista solo si el modelo ya se descargó', () => {
+  reset();
+  assert.equal(ai.configurado(ai.proveedor('local')), false);
+  localStorage.setItem('feynman.local', 'listo');
+  assert.equal(ai.configurado(ai.proveedor('local')), true);
+  localStorage.removeItem('feynman.local');
+});
+
+test('recorte de texto largo para modelos locales', async () => {
+  reset(); ai.setOllama({ url: '', modelo: '', apagada: false });
+  let enviado;
+  handler = async (u, init) => { if (u.endsWith('/api/tags')) return json({ models: [{ name: 'qwen2.5:7b' }] }); enviado = JSON.parse(init.body); return json({ message: { content: '{}' } }); };
+  await ai.detectarOllama(true);
+  await ai.chat([{ role: 'system', content: 'sys' }, { role: 'user', content: 'x'.repeat(20000) }]);
+  const usuario = enviado.messages.find((m) => m.role === 'user').content;
+  assert.ok(usuario.length < 9500 && /recortado/.test(usuario));
 });
 
 test('probar() devuelve el modelo y detecta respuestas fuera de formato', async () => {

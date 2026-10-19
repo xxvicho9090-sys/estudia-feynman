@@ -120,7 +120,7 @@ export default function App() {
   const c = screen.docId && concepto(screen);
   let vista;
   if (screen.name === 'settings') vista = <Settings onBack={volver} />;
-  else if (screen.name === 'explain' && c) vista = <Explain key={screen.conceptId} doc={docDe(screen.docId)} concepto={c} indice={indice(screen)} onBack={volver} onResult={(t, ev) => resultado(screen, ev)} />;
+  else if (screen.name === 'explain' && c) vista = <Explain key={screen.conceptId} doc={docDe(screen.docId)} concepto={c} indice={indice(screen)} onBack={volver} onResult={(t, ev) => resultado(screen, ev)} onGo={(id) => reemplazar({ name: 'explain', docId: screen.docId, conceptId: id })} />;
   else if (screen.name === 'result' && c && screen.result) {
     const d = docDe(screen.docId);
     const hayMas = d.conceptos.findIndex((x) => x.id === c.id) < d.conceptos.length - 1;

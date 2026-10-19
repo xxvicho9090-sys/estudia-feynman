@@ -12,3 +12,4 @@ export const Trash = () => <Svg><path d="M3 6h18M8 6V4h8v2m-1 0v14H9V6" /></Svg>
 export const Plus = () => <Svg><path d="M12 5v14M5 12h14" /></Svg>;
 export const Close = () => <Svg><path d="M6 6l12 12M18 6 6 18" /></Svg>;
 export const Folder = () => <Svg size={22}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></Svg>;
+export const List = () => <Svg><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" /></Svg>;

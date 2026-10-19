@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Back, Chevron } from '../icons.jsx';
 import Hoja from './Hoja.jsx';
+import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { paginar, calcularPrueba, NOMBRES, TIPOS } from '../lib/quiz.js';
 import { formatoNota, mensajeNota } from '../lib/grade.js';
 
@@ -17,6 +18,7 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
       <div className="mesa-bar">
         <button className="ibtn" aria-label="Volver a Pruebas" onClick={onVolver}><Back /></button>
         <div style={{ flex: 1, minWidth: 0 }}><div className="crumb">Prueba corregida</div><div style={{ fontWeight: 700, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prueba.titulo}</div></div>
+        <BotonPantallaCompleta />
       </div>
 
       <section className="gcard resumen" aria-label="Resumen de la prueba">

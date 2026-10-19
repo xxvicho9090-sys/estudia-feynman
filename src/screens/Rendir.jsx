@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Back, Chevron, List } from '../icons.jsx';
 import Hoja from './Hoja.jsx';
+import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { paginar, contestadas } from '../lib/quiz.js';
 
 const respondida = (prueba, p) => { const r = prueba.respuestas?.[p.id]; return p.tipo === 'desarrollo' ? !!String(r || '').trim() : r !== undefined && r !== null; };
@@ -31,6 +32,7 @@ export default function Rendir({ prueba, onChange, onEntregar, onBack }) {
           <div className="crumb">Prueba en curso</div>
           <div style={{ fontWeight: 700, fontSize: 14 }}>Respondidas {hechas} de {total}</div>
         </div>
+        <BotonPantallaCompleta />
         <button className="ibtn" aria-label="Ver todas las preguntas" onClick={() => setLista(true)}><List /></button>
       </div>
 

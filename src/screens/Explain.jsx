@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Back, Chevron, List, Mic, Stop } from '../icons.jsx';
+import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { evaluarExplicacion } from '../lib/groq.js';
 import { empezarDictado, pararDictado, soportado } from '../lib/voice.js';
@@ -53,6 +54,7 @@ export default function Explain({ doc, concepto, indice, onBack, onResult, onGo 
         <button className="ibtn" aria-label="Concepto anterior" disabled={i <= 0 || cargando} onClick={() => ir(doc.conceptos[i - 1])} style={{ opacity: i <= 0 ? .4 : 1 }}><Back /></button>
         <button className="ibtn" aria-label="Concepto siguiente" disabled={i >= doc.conceptos.length - 1 || cargando} onClick={() => ir(doc.conceptos[i + 1])} style={{ opacity: i >= doc.conceptos.length - 1 ? .4 : 1 }}><Chevron /></button>
         <button className="ibtn" aria-label="Ver todos los conceptos" onClick={() => setLista(true)}><List /></button>
+        <BotonPantallaCompleta />
       </div>
       <div style={{ marginTop: 24 }}>
         <div className="crumb" style={{ color: 'var(--acc)' }}>Explícalo con tus palabras</div>

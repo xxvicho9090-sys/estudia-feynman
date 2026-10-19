@@ -3,6 +3,7 @@ import { Gear, Plus, Folder } from '../icons.jsx';
 import RamosPanel from './RamosPanel.jsx';
 import { BannerInstalar } from './Instalar.jsx';
 import PruebasTab from './PruebasTab.jsx';
+import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { hayIA } from '../lib/ai.js';
 import { promedio, evaluados, totalConceptos, colorRamo } from '../lib/ramos.js';
@@ -58,6 +59,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
           <div style={{ display: 'flex', gap: 8, flex: 'none' }}>
             {ramo && !doc && !enPruebas && <button className="ibtn" aria-label="Editar ramo" onClick={() => onEditRamo(ramo.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
             {doc && !enPruebas && <button className="ibtn" aria-label="Editar PDF y conceptos" onClick={() => onEditDoc(doc.id)}><span style={{ fontWeight: 800 }}>···</span></button>}
+            <BotonPantallaCompleta />
             <button className="ibtn" aria-label="Ajustes" onClick={onSettings}><Gear /></button>
             <button className="ibtn only-narrow" aria-label="Ver ramos y PDFs" onClick={() => setPanel(true)}><Folder /></button>
           </div>

@@ -20,13 +20,19 @@ function Atras({ texto, etiqueta, onClick }) {
   return <button className="atras" aria-label={etiqueta} onClick={onClick}><Back /><span>{texto}</span></button>;
 }
 
-function Notas({ docs }) {
+function Notas({ docs, onReiniciar }) {
   const p = prom(docs);
-  return <div className="stats">{totalConceptos(docs)} conceptos · {evaluados(docs)} evaluados{p && <> · promedio <b>{p}</b></>}</div>;
+  return (
+    <div className="stats">
+      {totalConceptos(docs)} conceptos · {evaluados(docs)} evaluados{p && <> · promedio <b>{p}</b></>}
+      {onReiniciar && evaluados(docs) > 0 && <> · <button className="linkbtn" style={{ fontWeight: 700 }} onClick={onReiniciar} title="Quita las notas de los conceptos para volver a empezar">Reiniciar notas</button></>}
+    </div>
+  );
 }
 
-export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs, onCancelarSubida, onMoverDocs }) {
+export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs, onCancelarSubida, onMoverDocs, onReiniciarNotas }) {
   const input = useRef(null);
+  const [reiniciar, setReiniciar] = useState(null); // { docs, donde }: PDFs cuyas notas se van a reiniciar, esperando confirmación
   const [moviendo, setMoviendo] = useState(null); // PDFs que se van a mover con el botón "Mover a…"
   const [arrastrandoDoc, setArrastrandoDoc] = useState(false);
   const [sobreRamo, setSobreRamo] = useState(null);
@@ -60,7 +66,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
 
   let cabecera, cuerpo;
   if (doc) {
-    cabecera = <><Atras texto={ramo?.nombre} etiqueta={`Volver a ${ramo?.nombre || 'el ramo'}`} onClick={() => setSel({ ramoId: ramo?.id })} /><h1>{doc.nombre}</h1><Notas docs={[doc]} /></>;
+    cabecera = <><Atras texto={ramo?.nombre} etiqueta={`Volver a ${ramo?.nombre || 'el ramo'}`} onClick={() => setSel({ ramoId: ramo?.id })} /><h1>{doc.nombre}</h1><Notas docs={[doc]} onReiniciar={() => setReiniciar({ docs: [doc], donde: `de “${doc.nombre}”` })} /></>;
     cuerpo = !doc.conceptos.length
       ? <div className="empty">Este PDF no tiene conceptos todavía.<br /><button className="linkbtn" onClick={() => onEditDoc(doc.id)}>Agrégalos a mano</button></div>
       : <div className="list" role="list">{doc.conceptos.map((c) => (
@@ -69,7 +75,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
           {c.nota == null ? <span className="go">Explicar</span> : <span className={'chip ' + (c.nota >= 4 ? 'ok' : 'no')}>{formatoNota(c.nota)}</span>}
         </button>))}</div>;
   } else if (ramo) {
-    cabecera = <><Atras texto="Todos los ramos" etiqueta="Volver al inicio" onClick={() => { salirSel(); setSel({}); }} /><h1>{ramo.nombre}</h1><Notas docs={docsRamo} /></>;
+    cabecera = <><Atras texto="Todos los ramos" etiqueta="Volver al inicio" onClick={() => { salirSel(); setSel({}); }} /><h1>{ramo.nombre}</h1><Notas docs={docsRamo} onReiniciar={() => setReiniciar({ docs: docsRamo, donde: `del ramo “${ramo.nombre}”` })} /></>;
     cuerpo = !docsRamo.length
       ? <div className="empty">Este ramo no tiene PDFs.<br />Toca “Subir PDFs” para agregar el primero.</div>
       : <div className="grid">{docsRamo.map((d) => (
@@ -83,7 +89,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
             </>}
         </div>))}</div>;
   } else {
-    cabecera = <><div className="crumb">Todos mis ramos</div><h1>Qué voy a<br />explicar hoy</h1></>;
+    cabecera = <><div className="crumb">Todos mis ramos</div><h1>Qué voy a<br />explicar hoy</h1>{docs.length > 0 && <Notas docs={docs} onReiniciar={() => setReiniciar({ docs, donde: 'de todos tus ramos' })} />}</>;
     cuerpo = !ramos.length
       ? <div className="empty">Todavía no hay nada.<br />Sube un PDF de tus apuntes, elige su ramo y saco los conceptos para que los expliques.</div>
       : <div className="grid">{ramos.map((r) => { const ds = docs.filter((d) => d.ramoId === r.id); return <div key={r.id} {...soltarEn(r.id)} className={sobreRamo === r.id ? 'tile-wrap dropzona' : 'tile-wrap'}><Tile color={colorRamo(ramos, r)} titulo={r.nombre} docs={ds} extra={`${ds.length} PDFs`} onClick={() => setSel({ ramoId: r.id })} /></div>; })}</div>;
@@ -164,6 +170,7 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
       )}
       {arrastrandoDoc && <div className="actualizar arrastre-hint" role="status">Suelta el PDF sobre un ramo del panel de la derecha</div>}
       {moviendo && <MoverA docs={moviendo} ramos={ramos} onCancel={() => setMoviendo(null)} onOk={(destino) => { const ids = moviendo.map((d) => d.id); setMoviendo(null); salirSel(); onMoverDocs(ids, destino); }} />}
+      {reiniciar && <ConfirmarReiniciar docs={reiniciar.docs} donde={reiniciar.donde} onCancel={() => setReiniciar(null)} onOk={() => { const ids = reiniciar.docs.map((d) => d.id); setReiniciar(null); onReiniciarNotas(ids); }} />}
       {confirmar && <ConfirmarBorrar docs={confirmar} onCancel={() => setConfirmar(null)} onOk={() => { const ids = confirmar.map((d) => d.id); setConfirmar(null); salirSel(); onBorrarDocs(ids); }} />}
       {pendientes && <ElegirRamo archivos={pendientes} ramos={ramos} docs={docs} inicial={sel.ramoId} onCancel={() => setPendientes(null)} onOk={(destino, elegidos) => { setPendientes(null); onFiles(elegidos, destino); }} />}
       {progreso && (
@@ -273,6 +280,23 @@ function ConfirmarBorrar({ docs, onCancel, onOk }) {
         <div className="two">
           <button className="btn ghost" onClick={onCancel}>Cancelar</button>
           <button className="btn" style={{ background: 'var(--bad-bar)', boxShadow: 'none' }} onClick={onOk}>Borrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Confirmación antes de reiniciar notas: dice cuántas se quitan y qué NO se toca.
+function ConfirmarReiniciar({ docs, donde, onCancel, onOk }) {
+  const n = evaluados(docs);
+  return (
+    <div className="sheet" role="alertdialog" aria-modal="true" aria-label="Reiniciar notas" onClick={(e) => { if (e.target === e.currentTarget) onCancel(); }}>
+      <div>
+        <h2>¿Reiniciar las notas {donde}?</h2>
+        <p className="sub" style={{ fontSize: 15, lineHeight: 1.55, margin: '10px 0 18px' }}>Se quitan <b style={{ color: 'var(--ink)' }}>{n} {n === 1 ? 'nota' : 'notas'}</b> de conceptos y vuelven a aparecer como “Explicar”, para empezar de cero. Tus PDFs, conceptos y <b style={{ color: 'var(--ink)' }}>pruebas</b> no se tocan. Después podrás pulsar “Deshacer” unos segundos.</p>
+        <div className="two">
+          <button className="btn ghost" onClick={onCancel}>Cancelar</button>
+          <button className="btn" onClick={onOk}>Reiniciar notas</button>
         </div>
       </div>
     </div>

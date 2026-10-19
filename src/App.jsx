@@ -15,7 +15,7 @@ import { useLocal } from './lib/local.js';
 import { useActualizacion, aplicarActualizacion } from './actualizar.js';
 import { procesarPdf } from './lib/extract.js';
 import { nuevoId } from './lib/concepts.js';
-import { nuevoRamo } from './lib/ramos.js';
+import { nuevoRamo, reiniciarNotasDe, restaurarNotasDe } from './lib/ramos.js';
 import { resumenSubida } from './lib/archivos.js';
 import { docsAMover, textoMovido } from './lib/mover.js';
 import { mismoOrigen, docsDeOrigen } from './lib/quiz.js';
@@ -51,6 +51,8 @@ export default function App() {
   const tPapelera = useRef(null);
   const [movido, setMovido] = useState(null); // último movimiento de PDFs (para poder deshacer)
   const tMovido = useRef(null);
+  const [notasPrev, setNotasPrev] = useState(null); // notas recién reiniciadas (para poder deshacer)
+  const tNotas = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -146,6 +148,35 @@ export default function App() {
     setSel((s) => (s.docId && previo.has(s.docId) ? { ramoId: previo.get(s.docId), docId: s.docId } : s));
     // Si el movimiento había creado un ramo nuevo, al deshacer ese ramo queda vacío: se quita.
     if (m.ramoNuevoId) { await borrarRamo(m.ramoNuevoId); setRamos((rs) => rs.filter((r) => r.id !== m.ramoNuevoId)); setSel((s) => (s.ramoId === m.ramoNuevoId ? {} : s)); }
+  };
+  // Quita las notas de los conceptos de los PDFs dados y deja unos segundos el botón "Deshacer".
+  const reiniciarNotas = async (ids) => {
+    const cambios = [];
+    for (const d of docs.filter((x) => ids.includes(x.id))) {
+      const r = reiniciarNotasDe(d);
+      if (!r.n) continue;
+      await guardarDoc(r.doc);
+      cambios.push({ doc: r.doc, previas: r.previas, n: r.n });
+    }
+    if (!cambios.length) return;
+    setDocs((ds) => ds.map((d) => cambios.find((c) => c.doc.id === d.id)?.doc || d));
+    setNotasPrev({ cambios: cambios.map(({ doc, previas }) => ({ id: doc.id, previas })), n: cambios.reduce((s, c) => s + c.n, 0) });
+    clearTimeout(tNotas.current);
+    tNotas.current = setTimeout(() => setNotasPrev(null), 10000);
+  };
+  const deshacerNotas = async () => {
+    const np = notasPrev;
+    if (!np) return;
+    clearTimeout(tNotas.current); setNotasPrev(null);
+    const nuevos = [];
+    for (const { id, previas } of np.cambios) {
+      const actual = docs.find((d) => d.id === id);
+      if (!actual) continue;
+      const rest = restaurarNotasDe(actual, previas);
+      await guardarDoc(rest);
+      nuevos.push(rest);
+    }
+    setDocs((ds) => ds.map((d) => nuevos.find((n) => n.id === d.id) || d));
   };
   const guardar = async (doc) => { await guardarDoc(doc); setDocs((ds) => ds.map((d) => (d.id === doc.id ? doc : d))); };
 
@@ -291,7 +322,7 @@ export default function App() {
     <Home ramos={ramos} docs={docs} sel={sel} setSel={elegir} avisos={avisos} cerrarAviso={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} progreso={progreso} onFiles={subir} onCancelarSubida={cancelarSubida}
       onOpenConcept={(docId, conceptId) => ir({ name: 'explain', docId, conceptId })} onEditDoc={setEditId} onNewRamo={() => setRamoSheet(null)} onEditRamo={setRamoSheet} onSettings={() => ir({ name: 'settings' })}
       tab={tab} setTab={setTab} pruebas={pruebas} errorPrueba={errorPrueba} onCrearPrueba={crearNuevaPrueba} onAbrirPrueba={abrirPrueba}
-      onBorrarDocs={borrarDocs} onMoverDocs={moverDocs}
+      onBorrarDocs={borrarDocs} onMoverDocs={moverDocs} onReiniciarNotas={reiniciarNotas}
       onBorrarPrueba={async (id) => { await borrarPrueba(id); pruebasRef.current = pruebasRef.current.filter((p) => p.id !== id); setPruebas(pruebasRef.current); }} />
   );
 
@@ -302,6 +333,12 @@ export default function App() {
       {editDoc && <Editor key={editDoc.id} doc={editDoc} ramos={ramos} onClose={() => setEditId(null)}
         onSave={async (d) => { await guardar(d); setEditId(null); setSel((s) => (s.docId === d.id ? { ramoId: d.ramoId, docId: d.id } : s)); setToast('Cambios guardados'); }}
         onDeleteDoc={async () => { setEditId(null); setSel({ ramoId: editDoc.ramoId }); await borrarDocs([editDoc.id]); }} />}
+      {notasPrev && !papelera && !movido && (
+        <div className="actualizar deshacer" role="status">
+          <span>{notasPrev.n === 1 ? '1 nota reiniciada' : `${notasPrev.n} notas reiniciadas`}</span>
+          <button className="btn" onClick={deshacerNotas}>Deshacer</button>
+        </div>
+      )}
       {movido && !papelera && (
         <div className="actualizar deshacer" role="status">
           <span>{movido.texto}</span>

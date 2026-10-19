@@ -15,3 +15,21 @@ export const totalConceptos = (docs) => docs.reduce((n, d) => n + d.conceptos.le
 
 // El color depende de la posición del ramo, así un cambio de paleta se aplica también a los ramos ya creados.
 export const colorRamo = (ramos, r) => COLORES[Math.max(0, ramos.findIndex((x) => x.id === r.id)) % COLORES.length];
+
+// ---- Reiniciar notas de conceptos ----
+// Quita la nota de todos los conceptos de un PDF (sin tocar el original). Devuelve el PDF nuevo,
+// cuántas notas había y las notas previas (para poder deshacer).
+export function reiniciarNotasDe(doc) {
+  const previas = {};
+  const conceptos = doc.conceptos.map((c) => {
+    if (c.nota == null) return c;
+    previas[c.id] = { nota: c.nota, notaFecha: c.notaFecha ?? null };
+    return { ...c, nota: null, notaFecha: null };
+  });
+  return { doc: { ...doc, conceptos }, previas, n: Object.keys(previas).length };
+}
+
+// Vuelve a poner las notas guardadas por reiniciarNotasDe (ignora conceptos que ya no existen).
+export function restaurarNotasDe(doc, previas) {
+  return { ...doc, conceptos: doc.conceptos.map((c) => (previas[c.id] ? { ...c, ...previas[c.id] } : c)) };
+}

@@ -42,18 +42,25 @@ Responde SOLO JSON: {"preguntas":[{"enunciado":"...","opciones":["...","...","..
   vf: (n) => `${REGLAS}
 Crea EXACTAMENTE ${n} afirmaciones de VERDADERO O FALSO. Mezcla verdaderas y falsas en proporción parecida (las falsas deben ser errores sutiles pero claramente falsos según el material, p. ej. cambiar un requisito, un efecto o una condición); nada de "siempre/nunca" como única pista.
 Responde SOLO JSON: {"preguntas":[{"enunciado":"afirmación","correcta":true,"explicacion":"si es falsa, indica cuál sería lo correcto","concepto":"..."}]}`,
+  caso: (n, m) => `${REGLAS}
+Crea EXACTAMENTE ${n} CASOS PRÁCTICOS ficticios, al estilo de una prueba de Derecho de pregrado. Cada caso lleva:
+- "titulo": corto.
+- "hechos": un relato de 120 a 220 palabras con personas y empresas de nombres inventados, fechas, montos y circunstancias concretas. Sin dar las respuestas ni decir qué norma se aplica.
+- "preguntas": EXACTAMENTE ${m} preguntas de DESARROLLO que obliguen a APLICAR la materia a los hechos (por ejemplo "¿Se cumplen los requisitos de…?", "¿Qué efectos produce…?", "¿Qué puede exigir X a Y y por qué?"). Cada pregunta con una "pauta" de 3 a 5 ideas clave que una buena respuesta debe contener (aplicadas al caso).
+Los HECHOS son inventados, pero las reglas, requisitos y conceptos jurídicos con que se resuelve el caso deben salir SOLO del MATERIAL. Cada caso trata conceptos distintos del material.
+Responde SOLO JSON: {"casos":[{"titulo":"...","hechos":"...","preguntas":[{"enunciado":"...","pauta":["idea clave 1","idea clave 2","idea clave 3"],"concepto":"..."}]}]}`,
   desarrollo: (n) => `${REGLAS}
 Crea EXACTAMENTE ${n} preguntas de DESARROLLO (respuesta escrita de un párrafo o más), del tipo "Explique…", "Distinga…", "Señale los requisitos de…", "Analice…". Cada una con una "pauta": lista de 3 a 5 ideas clave que una buena respuesta debe contener, tomadas del material.
 Responde SOLO JSON: {"preguntas":[{"enunciado":"...","pauta":["idea clave 1","idea clave 2","idea clave 3"],"concepto":"..."}]}`,
 };
 
-export async function generarPreguntasDeTipo(tipo, n, material, { evitar = [], ...opts } = {}) {
-  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n) }, { role: 'user', content: (evitar.length ? `PREGUNTAS YA USADAS EN OTRAS PRUEBAS (no las repitas ni hagas versiones casi iguales; pregunta otros aspectos del material):\n${evitar.slice(0, 25).map((t) => `- ${t.slice(0, 110)}`).join('\n')}\n\n` : '') + `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
+export async function generarPreguntasDeTipo(tipo, n, material, { evitar = [], porCaso = 3, ...opts } = {}) {
+  const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n, porCaso) }, { role: 'user', content: (evitar.length ? `PREGUNTAS YA USADAS EN OTRAS PRUEBAS (no las repitas ni hagas versiones casi iguales; pregunta otros aspectos del material):\n${evitar.slice(0, 25).map((t) => `- ${t.slice(0, 110)}`).join('\n')}\n\n` : '') + `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
   return extraerJson(out);
 }
 
 // Corrige una respuesta de desarrollo contra la pauta (misma salida que evaluarExplicacion).
 export function corregirDesarrollo(pregunta, respuesta, opts) {
-  const ref = `PREGUNTA: ${pregunta.enunciado}\nIDEAS QUE DEBE CONTENER UNA BUENA RESPUESTA (pauta):\n${pregunta.pauta.map((p) => `- ${p}`).join('\n')}`;
+  const ref = `${pregunta.caso ? `CASO PRÁCTICO (${pregunta.caso.titulo}): ${pregunta.caso.hechos}\n` : ''}PREGUNTA: ${pregunta.enunciado}\nIDEAS QUE DEBE CONTENER UNA BUENA RESPUESTA (pauta):\n${pregunta.pauta.map((p) => `- ${p}`).join('\n')}`;
   return evaluarExplicacion(ref, respuesta, opts);
 }

@@ -1,18 +1,18 @@
 import { useMemo, useState } from 'react';
 import { Trash } from '../icons.jsx';
 import { hayIA } from '../lib/ai.js';
-import { armarMaterial, cobertura, mismoOrigen, presetPlan, planValido, totalPlan, NOMBRES, TIPOS, MAX_PREGUNTAS } from '../lib/quiz.js';
+import { armarMaterial, cobertura, mismoOrigen, presetPlan, planValido, totalPlan, NOMBRES, TIPOS, MAX_PREGUNTAS, MAX_CASOS, POR_CASO } from '../lib/quiz.js';
 import { formatoNota } from '../lib/grade.js';
 
-const PRESETS = [['alternativas', 'Alternativas'], ['vf', 'Verdadero o falso'], ['desarrollo', 'Desarrollo'], ['mixto', 'Mixto']];
+const PRESETS = [['alternativas', 'Alternativas'], ['vf', 'Verdadero o falso'], ['desarrollo', 'Desarrollo'], ['caso', 'Casos prácticos'], ['mixto', 'Mixto']];
 
-function Stepper({ etiqueta, valor, onChange }) {
+function Stepper({ etiqueta, valor, onChange, max = 99, min = 0 }) {
   return (
     <div className="stepper">
       <span>{etiqueta}</span>
-      <button className="ibtn" style={{ width: 40, height: 40 }} aria-label={`Menos ${etiqueta}`} disabled={valor <= 0} onClick={() => onChange(valor - 1)}>−</button>
+      <button className="ibtn" style={{ width: 40, height: 40 }} aria-label={`Menos ${etiqueta}`} disabled={valor <= min} onClick={() => onChange(valor - 1)}>−</button>
       <b aria-live="polite" aria-label={`${valor} ${etiqueta}`}>{valor}</b>
-      <button className="ibtn" style={{ width: 40, height: 40 }} aria-label={`Más ${etiqueta}`} onClick={() => onChange(valor + 1)}>+</button>
+      <button className="ibtn" style={{ width: 40, height: 40 }} aria-label={`Más ${etiqueta}`} disabled={valor >= max} onClick={() => onChange(valor + 1)}>+</button>
     </div>
   );
 }
@@ -61,8 +61,10 @@ export default function PruebasTab({ ramos, docs, sel, pruebas, errorPrueba, onC
 
         <div className="steppers">
           {TIPOS.map((t) => <Stepper key={t} etiqueta={NOMBRES[t]} valor={plan[t] || 0} onChange={(v) => cambiar(t, v)} />)}
+          <Stepper etiqueta={NOMBRES.caso} valor={plan.casos || 0} max={MAX_CASOS} onChange={(v) => cambiar('casos', v)} />
+          {plan.casos > 0 && <Stepper etiqueta="Preguntas por caso" valor={plan.porCaso || POR_CASO.defecto} max={POR_CASO.max} min={POR_CASO.min} onChange={(v) => cambiar('porCaso', Math.max(POR_CASO.min, v))} />}
         </div>
-        <div className="sub" style={{ marginTop: 10 }}>{n} {n === 1 ? 'pregunta' : 'preguntas'} en total{n > MAX_PREGUNTAS ? ` (máximo ${MAX_PREGUNTAS})` : ''}. Desarrollo vale 3 puntos; las demás, 1.</div>
+        <div className="sub" style={{ marginTop: 10 }}>{n} {n === 1 ? 'pregunta' : 'preguntas'} en total{n > MAX_PREGUNTAS ? ` (máximo ${MAX_PREGUNTAS})` : ''}. Desarrollo y cada pregunta de caso valen 3 puntos; las demás, 1.</div>
 
         {cob.cubiertos > 0 && (
           <label className="check" style={{ marginTop: 14 }}>

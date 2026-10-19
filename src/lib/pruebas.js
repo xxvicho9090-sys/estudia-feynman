@@ -1,5 +1,5 @@
 import { generarPreguntasDeTipo, corregirDesarrollo } from './groq.js';
-import { armarMaterial, normalizarPreguntas, conceptosCubiertos, enunciadosPrevios, similares, TIPOS, NOMBRES, totalPlan, calcularPrueba } from './quiz.js';
+import { armarMaterial, normalizarPreguntas, normalizarCasos, aplanarCasos, conceptosCubiertos, enunciadosPrevios, similares, TIPOS, NOMBRES, totalPlan, preguntasPorCaso, calcularPrueba } from './quiz.js';
 import { nuevoId } from './concepts.js';
 
 const FATALES = ['badkey', 'nokey', 'limit', 'offline'];
@@ -11,12 +11,17 @@ export async function crearPrueba({ docs, origen, plan, previas = [], evitarRepe
   const evitar = evitarRepetir ? enunciadosPrevios(previas) : [];
   const material = armarMaterial(docs, 12000, Math.random, vistos);
   if (!material.conceptos) throw new Error('No hay conceptos en el material elegido. Sube un PDF o agrega conceptos primero.');
-  const pasos = TIPOS.filter((t) => plan[t] > 0);
+  const pasos = [...TIPOS.filter((t) => plan[t] > 0), ...(plan.casos > 0 ? ['caso'] : [])]; // los casos prácticos van al final
   const preguntas = [];
   const avisos = [];
   for (let i = 0; i < pasos.length; i++) {
     const tipo = pasos[i];
     onProgress?.(`Creando ${NOMBRES[tipo].toLowerCase()} (${i + 1} de ${pasos.length})…`, i / pasos.length);
+    if (tipo === 'caso') {
+      const casos = await crearCasos(plan, material, evitar, signal, avisos);
+      preguntas.push(...aplanarCasos(casos, { nuevoId }));
+      continue;
+    }
     let lista = [];
     const parecidas = []; // repetidas respecto de pruebas anteriores: solo se usan si no alcanza con preguntas nuevas
     for (let intento = 0; intento < 2 && lista.length < plan[tipo]; intento++) {
@@ -69,4 +74,26 @@ export async function corregirPrueba(prueba, onProgress) {
   const sig = { ...prueba, evaluaciones };
   const r = calcularPrueba(sig);
   return { prueba: { ...sig, estado: r.pendientes ? 'por corregir' : 'corregida', resultado: r.pendientes ? null : r, entregada: prueba.entregada || Date.now() }, error };
+}
+
+// Casos prácticos ficticios: se piden n casos de m preguntas cada uno; se descartan los repetidos y se reintenta una vez si faltan.
+async function crearCasos(plan, material, evitar, signal, avisos) {
+  const porCaso = preguntasPorCaso(plan);
+  const huella = (c) => `${c.titulo} ${c.hechos.slice(0, 220)}`;
+  let casos = [];
+  for (let intento = 0; intento < 2 && casos.length < plan.casos; intento++) {
+    const faltan = plan.casos - casos.length;
+    try {
+      const crudo = await generarPreguntasDeTipo('caso', intento ? faltan + 1 : faltan, material.texto, { signal, evitar, porCaso });
+      for (const c of normalizarCasos(crudo, { nuevoId })) {
+        if (casos.some((x) => similares(huella(c), huella(x)))) continue;
+        casos.push({ ...c, preguntas: c.preguntas.slice(0, porCaso) });
+      }
+    } catch (e) {
+      if (e?.name === 'AbortError' || FATALES.includes(e?.code)) throw e;
+      if (intento) avisos.push('No pude crear todos los casos prácticos.');
+    }
+  }
+  if (casos.length < plan.casos && !avisos.length) avisos.push(`De los casos prácticos salieron ${casos.length} de ${plan.casos} pedidos.`);
+  return casos.slice(0, plan.casos);
 }

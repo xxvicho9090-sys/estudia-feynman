@@ -87,7 +87,7 @@ test('calcularPrueba: con desarrollo sin corregir no hay nota; al corregir se su
 });
 
 test('planes', () => {
-  assert.deepEqual(presetPlan('vf', 8), { alternativas: 0, vf: 8, desarrollo: 0 });
+  assert.deepEqual(presetPlan('vf', 8), { alternativas: 0, vf: 8, desarrollo: 0, casos: 0, porCaso: 3 });
   const m = presetPlan('mixto', 10);
   assert.equal(totalPlan(m), 10); assert.ok(m.alternativas > 0 && m.vf > 0 && m.desarrollo > 0);
   assert.equal(planValido({ alternativas: 0, vf: 0, desarrollo: 0 }), false);

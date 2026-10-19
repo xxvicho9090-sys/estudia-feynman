@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Back, Chevron } from '../icons.jsx';
-import Hoja, { Pregunta } from './Hoja.jsx';
+import Hoja, { Pregunta, CasoBox } from './Hoja.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
-import { paginar, calcularPrueba, puntosDe, NOMBRES, TIPOS } from '../lib/quiz.js';
+import { paginar, calcularPrueba, puntosDe, NOMBRES, SECCIONES, seccionDe } from '../lib/quiz.js';
 import { formatoNota, mensajeNota } from '../lib/grade.js';
 
 const pts = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
@@ -32,7 +32,7 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
           <div className="gt">{r.nota != null ? mensajeNota(r.nota) : 'Faltan desarrollos por corregir'}</div>
           <div className="sub" style={{ marginTop: 6, fontSize: 14 }}>{pts(r.puntos)} de {r.total} puntos · {Math.round(r.porcentaje)} % · aprobado desde 60 %</div>
           <div className="tipos">
-            {TIPOS.filter((t) => r.porTipo[t].n).map((t) => <span key={t} className="tipo-chip">{NOMBRES[t]}: {t === 'desarrollo' ? `${pts(r.porTipo[t].puntos)}/${r.porTipo[t].max} pts` : `${r.porTipo[t].buenas}/${r.porTipo[t].n}`}</span>)}
+            {SECCIONES.filter((t) => r.porTipo[t].n).map((t) => <span key={t} className="tipo-chip">{NOMBRES[t]}: {t === 'desarrollo' || t === 'caso' ? `${pts(r.porTipo[t].puntos)}/${r.porTipo[t].max} pts` : `${r.porTipo[t].buenas}/${r.porTipo[t].n}`}</span>)}
           </div>
         </div>
       </section>
@@ -55,7 +55,8 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
           <p className="sub" style={{ margin: '0 0 14px', lineHeight: 1.5 }}>{errores.length ? `Perdiste puntos en ${errores.length} ${errores.length === 1 ? 'pregunta' : 'preguntas'}. Aquí está lo que respondiste, la respuesta correcta y por qué.` : 'Respondiste todo correctamente. Puedes revisar la prueba corregida completa.'}</p>
           {errores.map(({ p, n, r: pr }) => (
             <article key={p.id} className="hoja err-card" aria-label={`Pregunta ${n}`}>
-              <div className="err-tipo">{NOMBRES[p.tipo]} · pregunta {n} · {pts(pr.puntos)} de {pr.max} {pr.max === 1 ? 'punto' : 'puntos'}</div>
+              <div className="err-tipo">{NOMBRES[seccionDe(p)]} · pregunta {n} · {pts(pr.puntos)} de {pr.max} {pr.max === 1 ? 'punto' : 'puntos'}</div>
+              {p.caso && <CasoBox caso={p.caso} />}
               <Pregunta p={p} n={n} modo="corregida" respuesta={prueba.respuestas?.[p.id]} evaluacion={prueba.evaluaciones?.[p.id]} />
             </article>
           ))}

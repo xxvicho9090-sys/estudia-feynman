@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Mic, Stop } from '../icons.jsx';
 import { empezarDictado, pararDictado, soportado } from '../lib/voice.js';
-import { puntosDe, NOMBRES, INSTRUCCION, ROMANO, PUNTOS, TIPOS } from '../lib/quiz.js';
+import { puntosDe, NOMBRES, INSTRUCCION, ROMANO, PUNTOS, SECCIONES, seccionDe, FILAS_CASO } from '../lib/quiz.js';
 import { formatoNota } from '../lib/grade.js';
 
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
@@ -11,7 +11,7 @@ const pts = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 export default function Hoja({ prueba, paginas, indice, modo, onResp, resumen }) {
   const pag = paginas[indice];
   const corr = modo === 'corregida';
-  const secciones = TIPOS.filter((t) => prueba.preguntas.some((p) => p.tipo === t));
+  const secciones = SECCIONES.filter((t) => prueba.preguntas.some((p) => seccionDe(p) === t));
   return (
     <article className="hoja" aria-label={`Hoja ${indice + 1} de ${paginas.length}`}>
       {indice === 0 && (
@@ -32,7 +32,7 @@ export default function Hoja({ prueba, paginas, indice, modo, onResp, resumen })
         </header>
       )}
 
-      {pag.preguntas.map(({ p, n, seccion }) => (
+      {pag.preguntas.map(({ p, n, seccion }, k) => (
         <section key={p.id} className="preg" aria-label={`Pregunta ${n}`}>
           {seccion && (
             <div className="sec">
@@ -40,6 +40,7 @@ export default function Hoja({ prueba, paginas, indice, modo, onResp, resumen })
               <span>{INSTRUCCION[seccion]} <em>({PUNTOS[seccion]} {PUNTOS[seccion] === 1 ? 'punto' : 'puntos'} cada una)</em></span>
             </div>
           )}
+          {p.caso && pag.preguntas[k - 1]?.p.caso?.id !== p.caso.id && <CasoBox caso={p.caso} continuacion={p.casoOrden > 0} />}
           <Pregunta p={p} n={n} modo={modo} respuesta={prueba.respuestas?.[p.id]} evaluacion={prueba.evaluaciones?.[p.id]} onResp={(v) => onResp?.(p.id, v)} />
         </section>
       ))}
@@ -92,14 +93,14 @@ export function Pregunta({ p, n, modo, respuesta, evaluacion, onResp }) {
         </div>
       )}
 
-      {p.tipo === 'desarrollo' && <Desarrollo valor={respuesta || ''} onChange={onResp} corr={corr} n={n} />}
+      {p.tipo === 'desarrollo' && <Desarrollo valor={respuesta || ''} onChange={onResp} corr={corr} n={n} filas={p.caso ? FILAS_CASO : 8} />}
 
       {corr && <Correccion p={p} respuesta={respuesta} evaluacion={evaluacion} />}
     </div>
   );
 }
 
-function Desarrollo({ valor, onChange, corr, n }) {
+function Desarrollo({ valor, onChange, corr, n, filas = 8 }) {
   const [oyendo, setOyendo] = useState(false);
   const [err, setErr] = useState('');
   const base = useRef('');
@@ -113,7 +114,7 @@ function Desarrollo({ valor, onChange, corr, n }) {
   };
   return (
     <div className="des">
-      <textarea className="rayas" aria-label={`Respuesta de desarrollo, pregunta ${n}`} value={valor} readOnly={corr} placeholder={corr ? '(sin respuesta)' : 'Escriba su respuesta aquí…'} onChange={(e) => onChange(e.target.value)} rows={corr ? Math.max(3, Math.ceil(valor.length / 70)) : 8} />
+      <textarea className="rayas" aria-label={`Respuesta de desarrollo, pregunta ${n}`} value={valor} readOnly={corr} placeholder={corr ? '(sin respuesta)' : 'Escriba su respuesta aquí…'} onChange={(e) => onChange(e.target.value)} rows={corr ? Math.max(3, Math.ceil(valor.length / 70)) : filas} />
       {!corr && soportado() && <button className={'mic' + (oyendo ? ' on' : '')} aria-label={oyendo ? 'Detener dictado' : 'Dictar la respuesta'} onClick={toggle}>{oyendo ? <Stop /> : <Mic size={20} />}</button>}
       {err && <div className="sub" role="alert" style={{ color: 'var(--bad)' }}>{err}</div>}
     </div>
@@ -162,4 +163,14 @@ function Correccion({ p, respuesta, evaluacion }) {
 
 function Pauta({ p }) {
   return <div className="expl">Pauta: {p.pauta.join(' · ')}</div>;
+}
+
+// Recuadro con el relato de un caso práctico (se repite en cada hoja donde haya preguntas de ese caso).
+export function CasoBox({ caso, continuacion }) {
+  return (
+    <aside className="caso" aria-label={`Caso ${caso.num}`}>
+      <div className="caso-t">Caso {caso.num}: {caso.titulo}{continuacion && <em> (continuación)</em>}</div>
+      <p>{caso.hechos}</p>
+    </aside>
+  );
 }

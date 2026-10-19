@@ -13,4 +13,5 @@ export const ESQ_EVALUACION = obj({
 export const ESQ_ALTERNATIVAS = obj({ preguntas: arr(obj({ enunciado: S, opciones: arr(S), correcta: { type: 'integer' }, explicacion: S, concepto: S })) });
 export const ESQ_VF = obj({ preguntas: arr(obj({ enunciado: S, correcta: { type: 'boolean' }, explicacion: S, concepto: S })) });
 export const ESQ_DESARROLLO = obj({ preguntas: arr(obj({ enunciado: S, pauta: arr(S), concepto: S })) });
-export const ESQ_TIPO = { alternativas: ESQ_ALTERNATIVAS, vf: ESQ_VF, desarrollo: ESQ_DESARROLLO };
+export const ESQ_CASOS = obj({ casos: arr(obj({ titulo: S, hechos: S, preguntas: arr(obj({ enunciado: S, pauta: arr(S), concepto: S })) })) });
+export const ESQ_TIPO = { alternativas: ESQ_ALTERNATIVAS, vf: ESQ_VF, desarrollo: ESQ_DESARROLLO, caso: ESQ_CASOS };

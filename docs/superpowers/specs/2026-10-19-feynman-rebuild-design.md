@@ -1,49 +1,46 @@
 # Estudia con Feynman — reconstrucción desde cero (diseño)
 
-Fecha: 2026-10-19 · Estado: pendiente de revisión del usuario
+Fecha: 2026-10-19 · Estado: pendiente de aprobación del usuario
 
-## Propósito
-Estudiar un ramo explicando cada concepto con palabras propias (técnica Feynman). La app compara la explicación con el material del propio usuario, **sin internet ni IA**, muestra qué ideas se cubrieron y cuáles faltaron, y agenda el repaso. Es la misma función de la app actual, reescrita limpia y reducida a lo esencial.
+## Propósito (lo único que hace)
+1. Subir PDFs.
+2. La app saca los conceptos.
+3. El usuario explica un concepto con sus palabras.
+4. La app lo evalúa con **nota de 1 a 7** y una explicación de **qué está bien dicho y qué está mal o falta**.
+
+Nada más: sin repaso espaciado, sin estadísticas, sin juegos, sin quiz, sin flashcards, sin usuarios, sin nube, sin exportar.
 
 ## Decisiones del usuario
-- Núcleo perfecto: ciclo Feynman (explicar → corrección → repaso). Extras que vuelven: **solo repaso espaciado** (+ progreso por ramo). Se descartan: Millonario, Buzz, quiz, flashcards sueltas, usuarios múltiples, nube, exportar PDF.
-- Evaluación **100 % offline**; no hay claves ni servidor de IA.
-- Material: PDF/Word subido por el usuario, partido por secciones; el usuario revisa y edita.
-- App nueva **desde cero** (no se migran datos de la app vieja).
-- Base: **React + Vite**, Capacitor (Android) y web; actualizaciones OTA existentes (Capgo + Render). Mismo repo, servicio Render y firma: se instala encima del APK actual.
+- App nueva **desde cero** (no se migran datos de la app vieja). Base **React + Vite**, web + APK (Capacitor), actualizaciones OTA existentes. Mismo repo, Render y firma.
+- Evaluación y extracción de conceptos: **con IA (Groq)**. Cada persona pega su clave gratis de Groq en la app (se guarda solo en el dispositivo; nunca en el repo ni en Render). Requiere internet.
 
-## Pantallas
-1. **Hoy**: conceptos que toca repasar, racha, acceso rápido a una sesión.
-2. **Ramos**: ramo → tema → concepto, con progreso por nivel.
-3. **Importar**: subir PDF/Word → propuesta de conceptos (por títulos y definiciones) → el usuario edita, fusiona, divide, borra o agrega a mano → guardar.
-4. **Sesión Feynman**: (a) solo se ve el nombre del concepto; (b) explicación por dictado de voz o texto; (c) resultado: ideas cubiertas, ideas que faltaron, frases dichas que no aparecen en el material, con el texto de referencia al lado; (d) el usuario se califica (difícil / bien / fácil) y puede dejar una nota; (e) se agenda el próximo repaso.
-5. **Repaso**: cola diaria con el mismo ciclo.
-6. **Ajustes y datos**: tema claro/oscuro, copia de seguridad (exportar/importar JSON), versión y estado de actualización.
+## Pantallas (solo tres)
+1. **Mis PDFs / conceptos**: subir uno o varios PDF; la app lista los conceptos encontrados por PDF. Se puede corregir la lista (renombrar, borrar, fusionar, agregar) porque la extracción automática no es perfecta.
+2. **Explicar**: se muestra el nombre del concepto; el usuario explica por dictado de voz o escribiendo y pulsa "Evaluar".
+3. **Resultado**: nota 1–7 (escala chilena, 4,0 = aprobado), lista "Bien dicho" (ideas del material que el usuario cubrió), "Mal o faltó" (ideas que no mencionó o dijo distinto) y el texto de referencia al lado. Botón para volver a intentar o pasar al siguiente concepto.
 
-## Arquitectura (módulos con una sola responsabilidad)
-- `parse/`: extrae texto de PDF (pdf.js) y Word (.docx) y lo parte en conceptos (títulos, definiciones "X es…", listas). Entrada: archivo. Salida: lista de {nombre, referencia}.
-- `evaluate/`: dada la referencia y la explicación (español), calcula cobertura de ideas (normalización, raíces de palabras, sinónimos tomados del propio material) → {ideasCubiertas, ideasFaltantes, extras, puntaje}. Función pura, probada con casos.
-- `srs/`: repaso espaciado tipo SM-2 con la autocalificación y el puntaje como entradas. Función pura, probada.
-- `store/`: IndexedDB local por dispositivo (ramos, temas, conceptos, intentos, calendario de repaso). Ningún dato sale del teléfono.
-- `ui/`: componentes React por pantalla; estado mínimo, sin lógica de negocio.
-- `ota/`: módulo de actualización existente (src/ota.js), sin cambios de comportamiento.
+## Arquitectura (módulos de una sola responsabilidad)
+- `parse/`: PDF → texto (pdf.js, por trozos) → la IA lista los conceptos con su texto de referencia (JSON). Sin clave o sin internet: respaldo por títulos y definiciones.
+- `ai/`: cliente Groq con salida JSON, reintentos y mensajes de error claros (sin clave, sin internet, límite de uso).
+- `evaluate/`: (explicación, referencia) → la IA devuelve {bien[], mal[], faltó[], puntaje 0–100}; la **nota 1–7 la calcula la app** con la fórmula fija (no la IA), así es consistente. Función de nota pura y probada.
+- `store/`: IndexedDB local (PDFs, conceptos, último resultado). Nada sale del teléfono.
+- `ui/`: React, tres pantallas, sin lógica de negocio.
+- `ota/`: módulo de actualización existente.
 
-## Flujo de datos
-Archivo → `parse` → conceptos editables → `store`. Sesión: concepto → explicación → `evaluate` → autocalificación → `srs` → `store` (próxima fecha) → pantalla Hoy/Repaso.
+## Nota 1–7
+Escala chilena con exigencia 60 %: 4,0 con 60 % de ideas clave cubiertas, 7,0 con 100 %, 1,0 con 0 %. Se redondea a un decimal. La fórmula se documenta en la pantalla de resultado.
+
+## Límites honestos
+- La IA puede equivocarse: por eso el resultado muestra siempre el texto de referencia al lado para contrastar.
+- Necesita internet y la clave de Groq del usuario; el plan gratis tiene límite de uso por minuto y por día.
+- Lo que escribes y el texto del PDF se envían a Groq para evaluarse (no se guarda en ningún servidor propio).
 
 ## Manejo de errores
-- PDF sin texto (escaneado): aviso claro, se permite pegar texto o crear conceptos a mano.
-- Documento sin títulos/definiciones detectables: se ofrece partir por párrafos.
-- Dictado de voz no disponible: se cae a escribir.
-- Sin almacenamiento disponible: mensaje y copia de seguridad.
-
-## Límite conocido (honesto)
-La evaluación mide cobertura de ideas del documento, no comprende el sentido: puede fallar con paráfrasis muy libres. Por eso la referencia se muestra al lado y la calificación final es del usuario.
+- Sin clave / sin internet / límite de Groq: mensaje claro y reintento; la lista de conceptos se puede hacer a mano.
+- PDF escaneado (sin texto): aviso claro; se puede pegar texto o crear conceptos a mano.
+- PDF sin títulos/definiciones detectables: se ofrece partir por párrafos.
+- Dictado no disponible: se cae a escribir.
 
 ## Pruebas
-- Pruebas automáticas de `evaluate` y `srs` (casos en español con aciertos, omisiones y paráfrasis).
-- Recorrido completo en navegador: importar → editar conceptos → sesión → repaso → copia de seguridad.
-- APK: compilación firmada y verificación de firma; funciones nativas (dictado) a confirmar en el teléfono.
-
-## Fuera de alcance (YAGNI)
-IA externa, servidor propio, cuentas/usuarios, nube, juegos, quiz, exportar a PDF, migración de datos antiguos.
+- Automáticas para la fórmula de nota y el parseo de la respuesta JSON de la IA (con respuestas simuladas), y `parse` con PDFs de ejemplo en español; una prueba real contra Groq con la clave del usuario.
+- Recorrido completo en navegador: subir PDF → conceptos → explicar → resultado. APK firmado verificado; dictado a confirmar en el teléfono.

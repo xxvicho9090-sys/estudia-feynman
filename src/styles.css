@@ -203,3 +203,7 @@ textarea.rayas:focus-visible{outline:2px solid var(--acc);outline-offset:4px;bor
 label.check{display:flex;align-items:flex-start;gap:10px;margin-top:14px;font-size:14px;font-weight:600;line-height:1.4;cursor:pointer}
 label.check input{width:20px;height:20px;margin-top:1px;accent-color:var(--acc);flex:none}
 code{background:var(--bg);padding:1px 6px;border-radius:6px;font-size:12px;word-break:break-all}
+
+/* Botón "Actualizar" cuando hay una versión nueva */
+.actualizar{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);transform:translateX(-50%);z-index:95;display:flex;align-items:center;gap:14px;max-width:min(92vw,520px);background:var(--ink);color:#fff;padding:8px 8px 8px 20px;border-radius:999px;box-shadow:0 12px 32px rgba(36,33,30,.35);font-weight:700;font-size:14px;animation:in .25s ease-out}
+.actualizar .btn{height:44px;padding:0 20px;font-size:14px;box-shadow:none;white-space:nowrap}

@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { Capacitor } from '@capacitor/core';
+import { iniciarActualizacionesWeb } from './actualizar.js';
 
 // Web instalable (laptop y Android) + actualización automática. En el APK no se usa: ahí actualiza ota.js.
 const native = Capacitor.isNativePlatform();
@@ -25,21 +26,10 @@ export async function instalar() {
   return outcome === 'accepted';
 }
 
-// Service worker: si llega una versión nueva se aplica sola cuando la app está en segundo plano;
-// con la app abierta se avisa con un botón para no perder lo que estás escribiendo.
-export function registrarSW(avisar) {
-  if (native || !('serviceWorker' in navigator) || !import.meta.env.PROD) return;
-  const habia = !!navigator.serviceWorker.controller;
-  let recargando = false;
-  navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (!habia || recargando) return;
-    if (document.hidden) { recargando = true; location.reload(); return; }
-    avisar(() => { recargando = true; location.reload(); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden && !recargando) { recargando = true; location.reload(); } });
-  });
-  navigator.serviceWorker.register('./sw.js').then((reg) => {
-    const buscar = () => reg.update().catch(() => {});
-    setInterval(buscar, 30 * 60 * 1000);
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') buscar(); });
-  }).catch(() => {});
+// Service worker (abrir rápido y funcionar sin conexión) + aviso/botón "Actualizar" cuando hay una versión nueva publicada.
+export function registrarSW() {
+  if (native) return; // en el APK actualiza ota.js
+  iniciarActualizacionesWeb(__APP_VERSION__);
+  if (!('serviceWorker' in navigator) || !import.meta.env.PROD) return;
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
 }

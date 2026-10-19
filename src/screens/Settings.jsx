@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Back, Check } from '../icons.jsx';
 import { SeccionInstalar } from './Instalar.jsx';
 import { PROVEEDORES, configurado, getClave, setClave, getOllama, setOllama, estadoOllama, detectarOllama, probar, ultimoUsado, proveedor, getLocalesPrimero, setLocalesPrimero } from '../lib/ai.js';
+import { useActualizacion, buscarActualizacion, aplicarActualizacion } from '../actualizar.js';
 import { prepararLocal, borrarLocal, soporte, TAMANO } from '../lib/local.js';
 
 const Cabecera = ({ p, conectada, texto }) => (
@@ -130,6 +131,22 @@ function TarjetaLocal({ p, onCambio }) {
   );
 }
 
+function SeccionActualizar() {
+  const a = useActualizacion();
+  const [aplicando, setAplicando] = useState(false);
+  const texto = { idle: 'Aún no he buscado.', buscando: 'Buscando…', descargando: `Descargando la versión ${a.version}…`, lista: `La versión ${a.version} está lista.`, alDia: 'Estás al día ✓', error: a.detalle }[a.estado];
+  return (
+    <section className="card" style={{ marginTop: 14 }} aria-label="Actualizaciones">
+      <div style={{ fontWeight: 800, fontSize: 16 }}>Actualizaciones</div>
+      <div className="sub" style={{ marginTop: 6 }}>Versión instalada: <b style={{ color: 'var(--ink)' }}>{__APP_VERSION__}</b> · <span role="status" style={{ color: a.estado === 'lista' ? 'var(--acc-d)' : a.estado === 'error' ? 'var(--bad)' : undefined, fontWeight: 600 }}>{texto}</span></div>
+      {a.estado === 'lista' && a.notas && <div className="sub" style={{ marginTop: 6 }}>{a.notas}</div>}
+      {a.estado === 'lista'
+        ? <button className="btn block" style={{ marginTop: 12 }} disabled={aplicando} onClick={() => { setAplicando(true); aplicarActualizacion(); }}>{aplicando ? 'Actualizando…' : 'Actualizar ahora'}</button>
+        : <button className="btn ghost block" style={{ marginTop: 12 }} disabled={a.estado === 'buscando' || a.estado === 'descargando'} onClick={buscarActualizacion}>{a.estado === 'buscando' ? 'Buscando…' : a.estado === 'descargando' ? 'Descargando…' : 'Buscar actualizaciones'}</button>}
+    </section>
+  );
+}
+
 export default function Settings({ onBack }) {
   const [, forzar] = useState(0);
   const cambio = () => forzar((x) => x + 1);
@@ -154,7 +171,8 @@ export default function Settings({ onBack }) {
       <div className="sub" style={{ marginTop: 10, lineHeight: 1.5 }}>Tu explicación y el texto de tus PDFs se envían solo a la IA que uses para evaluarte (con las locales no sale de tu dispositivo). Nada se guarda en otro servidor.</div>
 
       <SeccionInstalar />
-      <div className="sub" style={{ marginTop: 'auto', paddingTop: 24, textAlign: 'center' }}>Versión {__APP_VERSION__}</div>
+      <SeccionActualizar />
+      <div style={{ marginTop: 'auto', paddingTop: 24 }} />
     </div>
   );
 }

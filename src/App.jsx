@@ -10,6 +10,7 @@ import ResultadoPrueba from './screens/ResultadoPrueba.jsx';
 import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, listarPruebas, guardarPrueba, borrarPrueba, pedirPersistencia } from './lib/db.js';
 import { crearPrueba, corregirPrueba } from './lib/pruebas.js';
 import { detectarOllama } from './lib/ai.js';
+import { useActualizacion, aplicarActualizacion } from './actualizar.js';
 import { procesarPdf } from './lib/extract.js';
 import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo } from './lib/ramos.js';
@@ -36,7 +37,8 @@ export default function App() {
   const abortPrueba = useRef(null);
   const guardado = useRef({});
   const pruebasRef = useRef([]);
-  const [nueva, setNueva] = useState(null); // función que recarga con la versión nueva
+  const act = useActualizacion();
+  const [aplicando, setAplicando] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -56,7 +58,6 @@ export default function App() {
     })();
     pedirPersistencia();
   }, []);
-  useEffect(() => { const on = (e) => setNueva(() => e.detail); addEventListener('feynman-update', on); return () => removeEventListener('feynman-update', on); }, []);
   // Ollama se detecta solo al abrir la app y cada vez que vuelves a ella.
   useEffect(() => {
     const buscar = () => detectarOllama().then(() => redibujar((x) => x + 1));
@@ -227,8 +228,13 @@ export default function App() {
           </div>
         </div>
       )}
-      {nueva && <div className="toast" role="status" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>Hay una versión nueva <button className="linkbtn" style={{ color: '#FFB48A' }} onClick={nueva}>Actualizar</button></div>}
-      {toast && !nueva && <div className="toast" role="status">{toast}</div>}
+      {act.estado === 'lista' && (
+        <div className="actualizar" role="status">
+          <span>Hay una versión nueva{act.version ? ` (${act.version})` : ''}</span>
+          <button className="btn" disabled={aplicando} onClick={() => { setAplicando(true); aplicarActualizacion(); }}>{aplicando ? 'Actualizando…' : 'Actualizar'}</button>
+        </div>
+      )}
+      {toast && act.estado !== 'lista' && <div className="toast" role="status">{toast}</div>}
     </>
   );
 }

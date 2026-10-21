@@ -7,7 +7,8 @@ const obj = (properties, required = Object.keys(properties)) => ({ type: 'object
 export const ESQ_PRUEBA = obj({ ok: { type: 'boolean' } });
 export const ESQ_CONCEPTOS = obj({ conceptos: arr(obj({ nombre: S, referencia: S })) });
 export const ESQ_EVALUACION = obj({
-  ideas: arr(obj({ idea: S, estado: { type: 'string', enum: ['bien', 'parcial', 'falta', 'incorrecto'] }, dijiste: S, comentario: S })),
+  // "dijiste" es opcional: solo se pide cuando algo es incorrecto (menos texto = evaluación más rápida).
+  ideas: arr(obj({ idea: S, estado: { type: 'string', enum: ['bien', 'parcial', 'falta', 'incorrecto'] }, dijiste: S, comentario: S }, ['idea', 'estado', 'comentario'])),
   resumen: S,
 });
 export const ESQ_ALTERNATIVAS = obj({ preguntas: arr(obj({ enunciado: S, opciones: arr(S), correcta: { type: 'integer' }, explicacion: S, concepto: S })) });

@@ -3,6 +3,7 @@ import { Back, Chevron, List, Mic, Stop } from '../icons.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { formatoNota } from '../lib/grade.js';
 import { evaluarExplicacion } from '../lib/groq.js';
+import { calentar } from '../lib/ai.js';
 import { empezarDictado, pararDictado, soportado } from '../lib/voice.js';
 
 // Borradores por concepto: al saltar a otro concepto no se pierde lo que ibas escribiendo.
@@ -18,10 +19,17 @@ export default function Explain({ doc, concepto, indice, onBack, onResult, onGo 
   const [oyendo, setOyendo] = useState(false);
   const [cargando, setCargando] = useState(false);
   const [error, setError] = useState('');
+  const [seg, setSeg] = useState(0);
   const base = useRef('');
   const abort = useRef(null);
 
-  useEffect(() => () => { pararDictado(); abort.current?.abort(); }, []);
+  useEffect(() => {
+    if (!cargando) { setSeg(0); return undefined; }
+    const t = setInterval(() => setSeg((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [cargando]);
+
+  useEffect(() => { calentar(); return () => { pararDictado(); abort.current?.abort(); }; }, []);
 
   const toggleMic = async () => {
     setError('');
@@ -73,7 +81,7 @@ export default function Explain({ doc, concepto, indice, onBack, onResult, onGo 
             aria-label={oyendo ? 'Detener dictado' : 'Dictar por voz'} onClick={toggleMic} disabled={cargando}>{oyendo ? <Stop /> : <Mic />}</button>
         )}
         <button className="btn" style={{ height: 60, borderRadius: 20, fontSize: 17 }} onClick={evaluar} disabled={cargando}>
-          {cargando ? 'Evaluando…' : 'Evaluar mi explicación'}
+          {cargando ? `Evaluando… ${seg} s` : 'Evaluar mi explicación'}
         </button>
       </div>
       {lista && (

@@ -2,7 +2,7 @@
 // si uno llega a su límite (o falla), la app usa el siguiente que tengas disponible.
 // En la nube (gratis): Groq, Gemini, Cerebras, Mistral, OpenRouter. Sin internet: Ollama (tu computador) y la IA dentro de la app.
 // Todos los datos (claves, modelos) quedan solo en este dispositivo.
-import { chatLocal, localListo } from './local.js';
+import { chatLocal, localListo, calentarLocal } from './local.js';
 import { ESQ_PRUEBA } from './esquemas.js';
 
 export class AiError extends Error {
@@ -156,9 +156,9 @@ async function textoDe(p, res) {
 }
 
 // Una consulta a UN proveedor, probando otros modelos de su lista si el elegido no existe o no está permitido.
-async function consultar(p, messages, signal, esquema) {
+async function consultar(p, messages, signal, esquema, rapido) {
   if (p.tipo === 'webllm') {
-    try { return await chatLocal(paraLocal(p, messages), signal, esquema); } catch (e) {
+    try { return await chatLocal(paraLocal(p, messages), signal, esquema, rapido); } catch (e) {
       if (e?.name === 'AbortError') throw e;
       throw new AiError('http', `La IA dentro de la app falló: ${String(e?.message || e).slice(0, 160)}`);
     }
@@ -167,7 +167,7 @@ async function consultar(p, messages, signal, esquema) {
     const modelo = det.ollama.modelo || getOllama().modelo;
     if (!modelo) throw new AiError('nokey', 'Ollama no tiene ningún modelo instalado.');
     const { url } = getOllama();
-    const body = { model: modelo, stream: false, format: esquema || 'json', options: { temperature: 0.2, num_ctx: 8192 }, messages: paraLocal(p, messages) };
+    const body = { model: modelo, stream: false, format: esquema || 'json', keep_alive: '30m', options: rapido ? { temperature: 0, num_ctx: 4096, num_predict: 700 } : { temperature: 0.2, num_ctx: 8192 }, messages: paraLocal(p, messages) };
     const res = await http(p, `${url}/api/chat`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, signal);
     if (!res.ok) throw await errorDe(p, res);
     return textoDe(p, res);
@@ -193,7 +193,8 @@ async function consultar(p, messages, signal, esquema) {
 }
 
 // Consulta con respaldo automático entre proveedores.
-export async function chat(messages, { signal, esquema } = {}) {
+// rapido = respuestas cortas y deterministas (evaluar una explicación): menos contexto y tope de palabras.
+export async function chat(messages, { signal, esquema, rapido } = {}) {
   await detectarOllama();
   const lista = proveedoresConfigurados();
   if (!lista.length) throw new AiError('nokey', 'Falta conectar una IA. Pega una clave gratis en Ajustes.');
@@ -207,7 +208,7 @@ export async function chat(messages, { signal, esquema } = {}) {
   const fallos = [];
   for (const p of orden) {
     try {
-      const out = await consultar(p, messages, signal, esquema);
+      const out = await consultar(p, messages, signal, esquema, rapido);
       ultimo = p.id;
       return out;
     } catch (e) {
@@ -235,4 +236,14 @@ export async function probar(id) {
   enfriar.delete(id);
   ultimo = id;
   return p.id === 'ollama' ? det.ollama.modelo : ls.get(kModelo(id));
+}
+
+// Deja la IA local "caliente" antes de usarla (cargar el modelo en memoria es lo que más demora la primera vez).
+export async function calentar() {
+  try {
+    if (await detectarOllama()) {
+      const { url } = getOllama();
+      fetch(`${url}/api/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: det.ollama.modelo, keep_alive: '30m' }) }).catch(() => {});
+    } else if (localListo()) calentarLocal().catch(() => {});
+  } catch { /* calentar es opcional */ }
 }

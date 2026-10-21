@@ -17,17 +17,17 @@ export async function conceptosDeTexto(texto, opts, max = 12) {
     .filter((c) => c.nombre && c.referencia);
 }
 
-const SYS_EVAL = `Eres un profesor exigente pero justo. Te doy el MATERIAL de referencia de un concepto y la EXPLICACIÓN de un estudiante. Descompón el material en 4 a 8 IDEAS CLAVE y clasifica cada una según la explicación:
-- "bien": la explicó correctamente (aunque con otras palabras).
-- "parcial": la mencionó incompleta o imprecisa.
-- "falta": no la mencionó.
-- "incorrecto": dijo algo que contradice el material o es falso.
-Responde SOLO JSON: {"ideas":[{"idea":"idea clave en una frase","estado":"bien|parcial|falta|incorrecto","dijiste":"cita corta de lo que dijo el estudiante (solo si estado es incorrecto o parcial; si no, vacío)","comentario":"explicación breve: por qué está bien, qué faltó o por qué es incorrecto y cuál es lo correcto según el material"}],"resumen":"una frase de balance"}.
-Reglas: juzga SOLO con el material dado, no con tu conocimiento externo; no premies relleno; no inventes ideas que no estén en el material; español.`;
+const SYS_EVAL = `Eres un profesor justo que evalúa COMPRENSIÓN, no memoria. Te doy el MATERIAL de referencia de un concepto y la EXPLICACIÓN de un estudiante. Descompón el material en 4 a 5 IDEAS CLAVE (lo esencial que hay que entender, no frases copiadas) y clasifica cada una según la explicación:
+- "bien": el estudiante expresa el MISMO SIGNIFICADO, aunque use otras palabras, sinónimos, ejemplos, lenguaje cotidiano o un orden distinto. NO exijas los términos ni la redacción del material.
+- "parcial": capta solo una parte del significado, o es vago o impreciso.
+- "falta": no se refiere a esa idea.
+- "incorrecto": afirma algo que CONTRADICE el material. Nunca por usar otras palabras ni por omitir detalles; si dudas entre "incorrecto" y "parcial", elige "parcial".
+Responde SOLO JSON: {"ideas":[{"idea":"idea clave en menos de 8 palabras","estado":"bien|parcial|falta|incorrecto","comentario":"máximo 10 palabras: qué faltó o cuál es lo correcto según el material; vacío si está bien"}],"resumen":"una frase corta de balance"}. Si el estado es "incorrecto", agrega "dijiste" con la cita corta del estudiante.
+Reglas: juzga SOLO con el material, no con tu conocimiento externo; que repita o no el texto literal NO importa, importa que lo haya entendido; no premies relleno; no inventes ideas que no estén en el material; español. Sé breve.`;
 
 export async function evaluarExplicacion(referencia, explicacion, opts) {
   const user = `MATERIAL:\n${referencia}\n\nEXPLICACIÓN DEL ESTUDIANTE:\n${explicacion}`;
-  const out = await chat([{ role: 'system', content: SYS_EVAL }, { role: 'user', content: user }], { ...opts, esquema: ESQ_EVALUACION });
+  const out = await chat([{ role: 'system', content: SYS_EVAL }, { role: 'user', content: user }], { ...opts, esquema: ESQ_EVALUACION, rapido: true });
   return parseEvaluacion(out);
 }
 

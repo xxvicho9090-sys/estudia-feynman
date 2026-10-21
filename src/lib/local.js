@@ -74,12 +74,14 @@ export function detenerDescarga() {
 }
 
 // Misma forma que las otras IAs: recibe mensajes y devuelve texto.
-export async function chatLocal(messages, signal, esquema) {
+export const calentarLocal = () => prepararLocal();
+
+export async function chatLocal(messages, signal, esquema, rapido) {
   const m = await prepararLocal();
   const parar = () => m.interruptGenerate?.();
   signal?.addEventListener('abort', parar, { once: true });
   try {
-    const r = await m.chat.completions.create({ messages, temperature: 0.2, max_tokens: 1800, ...(esquema ? { response_format: { type: 'json_object', schema: JSON.stringify(esquema) } } : {}) });
+    const r = await m.chat.completions.create({ messages, temperature: rapido ? 0 : 0.2, max_tokens: rapido ? 700 : 1800, ...(esquema ? { response_format: { type: 'json_object', schema: JSON.stringify(esquema) } } : {}) });
     return r.choices?.[0]?.message?.content ?? '';
   } finally { signal?.removeEventListener('abort', parar); }
 }

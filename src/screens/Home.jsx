@@ -5,6 +5,7 @@ import { empezarArrastre, hayArrastreDoc, leerArrastre } from '../lib/mover.js';
 import RamosPanel from './RamosPanel.jsx';
 import { BannerInstalar } from './Instalar.jsx';
 import PruebasTab from './PruebasTab.jsx';
+import OralTab from './OralTab.jsx';
 import BannerIA from './BannerIA.jsx';
 import { useLocal } from '../lib/local.js';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
@@ -30,7 +31,7 @@ function Notas({ docs, onReiniciar }) {
   );
 }
 
-export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs, onCancelarSubida, onMoverDocs, onReiniciarNotas }) {
+export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, progreso, onFiles, onOpenConcept, onEditDoc, onNewRamo, onEditRamo, onSettings, tab, setTab, pruebas, errorPrueba, onCrearPrueba, onAbrirPrueba, onBorrarPrueba, onBorrarDocs, onCancelarSubida, onMoverDocs, onReiniciarNotas, orales, errorOral, onCrearOral, onAbrirOral, onBorrarOral }) {
   const input = useRef(null);
   const [reiniciar, setReiniciar] = useState(null); // { docs, donde }: PDFs cuyas notas se van a reiniciar, esperando confirmación
   const [moviendo, setMoviendo] = useState(null); // PDFs que se van a mover con el botón "Mover a…"
@@ -95,10 +96,14 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
       : <div className="grid">{ramos.map((r) => { const ds = docs.filter((d) => d.ramoId === r.id); return <div key={r.id} {...soltarEn(r.id)} className={sobreRamo === r.id ? 'tile-wrap dropzona' : 'tile-wrap'}><Tile color={colorRamo(ramos, r)} titulo={r.nombre} docs={ds} extra={`${ds.length} PDFs`} onClick={() => setSel({ ramoId: r.id })} /></div>; })}</div>;
   }
 
-  const enPruebas = tab === 'pruebas';
-  if (enPruebas) {
+  // "enPruebas" = fuera de la pestaña Estudiar (Pruebas u Oral): ahí no se muestran las herramientas de subir PDFs.
+  const enPruebas = tab !== 'estudiar';
+  if (tab === 'pruebas') {
     cabecera = <><div className="crumb">Evaluación</div><h1>Pruebas</h1><div className="stats">Crea una prueba sobre tus apuntes y recibe tu nota del 1 al 7.</div></>;
     cuerpo = <PruebasTab ramos={ramos} docs={docs} sel={sel} pruebas={pruebas} errorPrueba={errorPrueba} onCrear={onCrearPrueba} onAbrir={onAbrirPrueba} onBorrar={onBorrarPrueba} />;
+  } else if (tab === 'oral') {
+    cabecera = <><div className="crumb">Evaluación</div><h1>Oral</h1><div className="stats">Un profesor te interroga sobre tus apuntes, hablando o escribiendo.</div></>;
+    cuerpo = <OralTab ramos={ramos} docs={docs} sel={sel} orales={orales} error={errorOral} onCrear={onCrearOral} onAbrir={onAbrirOral} onBorrar={onBorrarOral} />;
   }
 
   return (
@@ -123,7 +128,8 @@ export default function Home({ ramos, docs, sel, setSel, avisos, cerrarAviso, pr
 
         <div className="tabs" role="tablist" aria-label="Secciones">
           <button role="tab" aria-selected={!enPruebas} className={!enPruebas ? 'on' : ''} onClick={() => setTab('estudiar')}>Estudiar</button>
-          <button role="tab" aria-selected={enPruebas} className={enPruebas ? 'on' : ''} onClick={() => setTab('pruebas')}>Pruebas</button>
+          <button role="tab" aria-selected={tab === 'pruebas'} className={tab === 'pruebas' ? 'on' : ''} onClick={() => setTab('pruebas')}>Pruebas</button>
+          <button role="tab" aria-selected={tab === 'oral'} className={tab === 'oral' ? 'on' : ''} onClick={() => setTab('oral')}>Oral</button>
         </div>
 
         <input ref={input} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { const f = [...e.target.files]; e.target.value = ''; if (f.length) recibir(f); }} />

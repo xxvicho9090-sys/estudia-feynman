@@ -2,12 +2,13 @@
 const DB = 'feynman2';
 let dbp;
 const open = () => (dbp ||= new Promise((res, rej) => {
-  const r = indexedDB.open(DB, 3);
+  const r = indexedDB.open(DB, 4);
   r.onupgradeneeded = () => {
     const db = r.result;
     if (!db.objectStoreNames.contains('docs')) db.createObjectStore('docs', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('ramos')) db.createObjectStore('ramos', { keyPath: 'id' });
     if (!db.objectStoreNames.contains('pruebas')) db.createObjectStore('pruebas', { keyPath: 'id' });
+    if (!db.objectStoreNames.contains('orales')) db.createObjectStore('orales', { keyPath: 'id' });
   };
   r.onsuccess = () => res(r.result);
   r.onerror = () => rej(r.error);
@@ -33,6 +34,9 @@ export const borrarRamo = (id) => tx('ramos', 'readwrite', (s) => s.delete(id));
 export const listarPruebas = async () => (await tx('pruebas', 'readonly', (s) => s.getAll())).sort((a, b) => b.creado - a.creado);
 export const guardarPrueba = (p) => tx('pruebas', 'readwrite', (s) => s.put(p));
 export const borrarPrueba = (id) => tx('pruebas', 'readwrite', (s) => s.delete(id));
+export const listarOrales = async () => (await tx('orales', 'readonly', (s) => s.getAll())).sort((a, b) => b.creado - a.creado);
+export const guardarOral = (o) => tx('orales', 'readwrite', (s) => s.put(o));
+export const borrarOral = (id) => tx('orales', 'readwrite', (s) => s.delete(id));
 
 export async function pedirPersistencia() {
   try { if (navigator.storage?.persist && !(await navigator.storage.persisted())) await navigator.storage.persist(); } catch { /* opcional */ }

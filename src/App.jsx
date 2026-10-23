@@ -7,7 +7,11 @@ import Editor from './screens/Editor.jsx';
 import RamoSheet from './screens/RamoSheet.jsx';
 import Rendir from './screens/Rendir.jsx';
 import ResultadoPrueba from './screens/ResultadoPrueba.jsx';
-import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, listarPruebas, guardarPrueba, borrarPrueba, pedirPersistencia } from './lib/db.js';
+import Oral from './screens/Oral.jsx';
+import ResultadoOral from './screens/ResultadoOral.jsx';
+import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo, listarPruebas, guardarPrueba, borrarPrueba, listarOrales, guardarOral, borrarOral, pedirPersistencia } from './lib/db.js';
+import { nuevoOral, conceptosUsados } from './lib/oral.js';
+import { puedeHablar } from './lib/hablar.js';
 import { crearPrueba, corregirPrueba, ampliarPrueba } from './lib/pruebas.js';
 import { detectarOllama } from './lib/ai.js';
 import { iniciarAutoLocal } from './lib/autolocal.js';
@@ -37,6 +41,9 @@ export default function App() {
   const [tab, setTab] = useState('estudiar');
   const [pruebas, setPruebas] = useState([]);
   const [errorPrueba, setErrorPrueba] = useState('');
+  const [orales, setOrales] = useState([]);
+  const [errorOral, setErrorOral] = useState('');
+  const oralesRef = useRef([]);
   const [trabajando, setTrabajando] = useState(null); // { titulo, texto, fraccion } al crear o corregir una prueba
   const [errorCorreccion, setErrorCorreccion] = useState('');
   const abortPrueba = useRef(null);
@@ -68,6 +75,7 @@ export default function App() {
         }
         setDocs(ds); setRamos(rs);
         const ps = await listarPruebas(); pruebasRef.current = ps; setPruebas(ps);
+        const os = await listarOrales(); oralesRef.current = os; setOrales(os);
       } catch { setToast('No se pudo abrir el almacenamiento del dispositivo.'); }
     })();
     pedirPersistencia();
@@ -317,6 +325,36 @@ export default function App() {
   };
   const volverAPruebas = () => { setTab('pruebas'); reemplazar(HOME); };
 
+  // ---- Interrogatorio oral ----
+  const oralDe = (id) => orales.find((o) => o.id === id);
+  // Igual que con las pruebas: fn recibe la versión más reciente, así la respuesta y su evaluación no se pisan.
+  const actualizarOral = (id, fn) => {
+    const actual = oralesRef.current.find((x) => x.id === id);
+    if (!actual) return;
+    const o = fn(actual);
+    oralesRef.current = oralesRef.current.map((x) => (x.id === id ? o : x));
+    setOrales(oralesRef.current);
+    clearTimeout(guardado.current['o' + id]);
+    guardado.current['o' + id] = setTimeout(() => guardarOral(o).catch(() => setToast('No se pudo guardar tu avance.')), 250);
+  };
+  const crearOral = async (cfg) => {
+    setErrorOral('');
+    try {
+      const previos = oralesRef.current.filter((x) => mismoOrigen(x.origen, cfg.origen));
+      const o = nuevoOral({ ...cfg, usados: conceptosUsados(previos), voz: puedeHablar() });
+      await guardarOral(o);
+      oralesRef.current = [o, ...oralesRef.current]; setOrales(oralesRef.current);
+      ir({ name: 'oral', oralId: o.id });
+    } catch (e) { setErrorOral(e?.message || 'No se pudo comenzar el interrogatorio.'); }
+  };
+  const abrirOral = (o) => ir(o.estado === 'terminado' ? { name: 'oral-result', oralId: o.id } : { name: 'oral', oralId: o.id });
+  const volverAOral = () => { setTab('oral'); reemplazar(HOME); };
+  const otroOral = (o) => {
+    const docsOrigen = docsDeOrigen(o.origen, docs, ramos);
+    if (!docsOrigen.some((d) => d.conceptos.length)) { setToast('Ya no queda material de este interrogatorio (¿borraste los PDFs?).'); return; }
+    crearOral({ docs: docsOrigen, origen: o.origen, n: o.conceptos.length, estilo: o.estilo });
+  };
+
   const concepto = (s) => docDe(s.docId)?.conceptos.find((c) => c.id === s.conceptId);
   const indice = (s) => { const d = docDe(s.docId); return d ? `${d.conceptos.findIndex((c) => c.id === s.conceptId) + 1} de ${d.conceptos.length}` : ''; };
 
@@ -337,6 +375,8 @@ export default function App() {
   if (screen.name === 'settings') vista = <Settings onBack={volver} />;
   else if (screen.name === 'rendir' && pruebaDe(screen.pruebaId)) vista = <Rendir key={`${screen.pruebaId}:${pruebaDe(screen.pruebaId).preguntas.length}`} prueba={pruebaDe(screen.pruebaId)} onAmpliar={(plan) => ampliar(screen.pruebaId, plan)} onChange={actualizarPrueba} onBack={volverAPruebas} onEntregar={() => corregir({ ...pruebaDe(screen.pruebaId), entregada: Date.now() })} />;
   else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} onAmpliar={(plan) => ampliar(screen.pruebaId, plan)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} onOtra={() => generarOtra(pruebaDe(screen.pruebaId))} />;
+  else if (screen.name === 'oral' && oralDe(screen.oralId)) vista = <Oral key={screen.oralId} oral={oralDe(screen.oralId)} onActualizar={(fn) => actualizarOral(screen.oralId, fn)} onBack={volverAOral} onResultado={() => reemplazar({ name: 'oral-result', oralId: screen.oralId })} />;
+  else if (screen.name === 'oral-result' && oralDe(screen.oralId)?.resultado) vista = <ResultadoOral key={screen.oralId} oral={oralDe(screen.oralId)} onVolver={volverAOral} onOtro={() => otroOral(oralDe(screen.oralId))} />;
   else if (screen.name === 'explain' && c) vista = <Explain key={screen.conceptId} doc={docDe(screen.docId)} concepto={c} indice={indice(screen)} onBack={volver} onResult={(t, ev) => resultado(screen, ev)} onGo={(id) => reemplazar({ name: 'explain', docId: screen.docId, conceptId: id })} />;
   else if (screen.name === 'result' && c && screen.result) {
     const d = docDe(screen.docId);
@@ -347,6 +387,7 @@ export default function App() {
     <Home ramos={ramos} docs={docs} sel={sel} setSel={elegir} avisos={avisos} cerrarAviso={(id) => setAvisos((a) => a.filter((x) => x.id !== id))} progreso={progreso} onFiles={subir} onCancelarSubida={cancelarSubida}
       onOpenConcept={(docId, conceptId) => ir({ name: 'explain', docId, conceptId })} onEditDoc={setEditId} onNewRamo={() => setRamoSheet(null)} onEditRamo={setRamoSheet} onSettings={() => ir({ name: 'settings' })}
       tab={tab} setTab={setTab} pruebas={pruebas} errorPrueba={errorPrueba} onCrearPrueba={crearNuevaPrueba} onAbrirPrueba={abrirPrueba}
+      orales={orales} errorOral={errorOral} onCrearOral={crearOral} onAbrirOral={abrirOral} onBorrarOral={async (id) => { await borrarOral(id); oralesRef.current = oralesRef.current.filter((o) => o.id !== id); setOrales(oralesRef.current); }}
       onBorrarDocs={borrarDocs} onMoverDocs={moverDocs} onReiniciarNotas={reiniciarNotas}
       onBorrarPrueba={async (id) => { await borrarPrueba(id); pruebasRef.current = pruebasRef.current.filter((p) => p.id !== id); setPruebas(pruebasRef.current); }} />
   );

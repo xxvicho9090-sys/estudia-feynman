@@ -256,3 +256,32 @@ code{background:var(--bg);padding:1px 6px;border-radius:6px;font-size:12px;word-
 .caso p{margin:0;font-size:clamp(15px,2.3vw,17px);line-height:1.6;white-space:pre-wrap}
 .caso-det{margin-top:8px}.caso-det summary{cursor:pointer;font:700 13px 'Plus Jakarta Sans',sans-serif;color:var(--acc-d)}
 .caso-det p{margin-top:8px}
+
+/* Interrogatorio oral */
+.ibtn.on{background:var(--acc-soft);border-color:var(--acc);color:var(--acc-d)}
+.oral-prog{display:flex;gap:6px;margin-top:18px}
+.oral-prog i{flex:1;height:6px;border-radius:3px;background:var(--line2)}
+.oral-prog i.ok{background:var(--ok-bar)}.oral-prog i.now{background:var(--acc)}
+.aula{display:flex;flex-direction:column;gap:12px;margin-top:16px;flex:1;min-height:180px}
+.burbuja{max-width:92%;padding:14px 16px;border-radius:18px;animation:in .25s ease}
+.burbuja .quien{font:800 11px var(--f);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px;opacity:.7}
+.burbuja .dicho{font-size:clamp(16px,2.4vw,18px);line-height:1.55;white-space:pre-wrap}
+.burbuja.profesor{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-left:4px solid var(--acc);font-family:'Source Serif 4',Georgia,serif}
+.burbuja.alumno{align-self:flex-end;background:var(--acc-soft);color:var(--ink)}
+.burbuja.escribiendo{opacity:.85}
+.puntos{display:inline-flex;gap:4px;margin-right:6px;vertical-align:middle}
+.puntos i{width:6px;height:6px;border-radius:50%;background:var(--acc);animation:salto 1s infinite ease-in-out}
+.puntos i:nth-child(2){animation-delay:.15s}.puntos i:nth-child(3){animation-delay:.3s}
+@keyframes salto{0%,80%,100%{transform:translateY(0);opacity:.5}40%{transform:translateY(-4px);opacity:1}}
+.oral-ctl{margin-top:14px;position:sticky;bottom:0;background:linear-gradient(transparent,var(--bg) 14px);padding-top:18px;padding-bottom:calc(env(safe-area-inset-bottom) + 6px)}
+textarea.oral-ta{min-height:96px;max-height:200px;width:100%}
+.escuchando{margin-top:6px;color:var(--bad);font-weight:700}
+.oral-extra{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.oral-extra .linkbtn{align-self:flex-start}
+.oral-res{margin-top:12px}
+.oral-res-top{display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:17px}
+.oral-obs{margin:8px 0 0;padding-left:20px;font-size:14.5px;line-height:1.5;color:var(--bad)}
+.oral-ref{margin-top:10px;padding:10px 12px;border-left:3px solid var(--line2);background:var(--bg);border-radius:0 10px 10px 0;font-size:14px;line-height:1.5;color:var(--mut)}
+.oral-ref b{color:var(--ink)}
+.oral-conv{margin-top:10px;font-size:14px}.oral-conv summary{cursor:pointer;font-weight:700;color:var(--acc-d)}
+.oral-conv p{margin:8px 0 0;line-height:1.5}.oral-conv p.alumno{color:var(--mut)}

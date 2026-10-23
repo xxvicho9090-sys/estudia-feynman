@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Back, Mic, Stop, Altavoz, Enviar } from '../icons.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
-import { empezarDictado, pararDictado, soportado } from '../lib/voice.js';
+import { empezarDictado, pararDictado, cancelarDictado, soportado } from '../lib/voice.js';
 import { hablar, callar, motorActual, puedeOfrecerVoz, alCambiarVoces } from '../lib/hablar.js';
 import { useVozNatural } from '../lib/vozNatural.js';
 import ElegirVoz from './ElegirVoz.jsx';
@@ -35,9 +35,9 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
   const motor = motorActual();
   const voz = oral.voz && motor.tipo !== 'ninguno';
   const manos = oral.manos && voz && soportado();
-  ultimo.current = { oral, manos };
+  ultimo.current = { oral, manos, texto };
 
-  useEffect(() => { calentar(); return () => { callar(); pararDictado(); clearTimeout(silencio.current); abort.current?.abort(); }; }, []);
+  useEffect(() => { calentar(); return () => { callar(); cancelarDictado(); clearTimeout(silencio.current); abort.current?.abort(); }; }, []);
   useEffect(() => {
     if (!evaluando) { setSeg(0); return undefined; }
     const t = setInterval(() => setSeg((s) => s + 1), 1000);
@@ -45,6 +45,8 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
   }, [evaluando]);
   useEffect(() => { const el = lista.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }, [oral.actual, c.turnos.length, evaluando, fin]);
 
+  // Al enviar o pasar: se corta el micrófono y se descarta lo que llegue tarde (si no, reaparecía en el cuadro mezclado con lo nuevo).
+  const cancelar = async () => { clearTimeout(silencio.current); await cancelarDictado(); setOyendo(false); base.current = ''; };
   const parar = async () => { clearTimeout(silencio.current); if (oyendo) { await pararDictado(); setOyendo(false); } };
   const evaluar = async (desde) => {
     setError(''); setEvaluando(true);
@@ -57,7 +59,7 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
     } finally { setEvaluando(false); }
   };
   const entregar = async (t) => {
-    await parar(); callar();
+    await cancelar(); callar();
     if (palabras(t) < 2) { setError('Responda con al menos una frase para que el profesor pueda evaluarlo.'); return; }
     setTexto('');
     const conRespuesta = registrarRespuesta(ultimo.current.oral, t);
@@ -66,7 +68,8 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
   };
   const empezar = async () => {
     setError('');
-    base.current = texto ? texto.trimEnd() + ' ' : '';
+    const previo = ultimo.current.texto;
+    base.current = previo ? previo.trimEnd() + ' ' : '';
     setOyendo(true);
     await empezarDictado(
       (t) => {
@@ -91,7 +94,7 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
   }, [pregunta, voz, fin, pendiente]);
   useEffect(() => { if (fin && voz) hablar(c.turnos[c.turnos.length - 1].texto); }, [fin]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const pasar = async () => { await parar(); callar(); setConfirmarPasar(false); setTexto(''); onActualizar((actual) => pasarConcepto(actual)); };
+  const pasar = async () => { await cancelar(); callar(); setConfirmarPasar(false); setTexto(''); onActualizar((actual) => pasarConcepto(actual)); };
 
   const estado = evaluando ? 'escribiendo…' : fin ? 'Interrogatorio terminado' : oyendo ? 'escuchándole…' : `Pregunta ${oral.actual + 1} de ${oral.conceptos.length}`;
   const enviarConEnter = (e) => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia?.('(pointer:fine)').matches) { e.preventDefault(); if (!evaluando && palabras(texto) >= 2) entregar(texto); } };

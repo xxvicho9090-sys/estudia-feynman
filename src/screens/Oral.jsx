@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Back, Mic, Stop, Altavoz } from '../icons.jsx';
+import { Back, Mic, Stop, Altavoz, Enviar } from '../icons.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { empezarDictado, pararDictado, soportado } from '../lib/voice.js';
 import { hablar, callar, motorActual, puedeOfrecerVoz, alCambiarVoces } from '../lib/hablar.js';
@@ -30,7 +30,7 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
   const base = useRef('');
   const abort = useRef(null);
   const silencio = useRef(null);
-  const fondo = useRef(null);
+  const lista = useRef(null);
   const ultimo = useRef({});
   const motor = motorActual();
   const voz = oral.voz && motor.tipo !== 'ninguno';
@@ -43,7 +43,7 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
     const t = setInterval(() => setSeg((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, [evaluando]);
-  useEffect(() => { fondo.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [c.turnos.length, evaluando, fin]);
+  useEffect(() => { const el = lista.current; if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }); }, [oral.actual, c.turnos.length, evaluando, fin]);
 
   const parar = async () => { clearTimeout(silencio.current); if (oyendo) { await pararDictado(); setOyendo(false); } };
   const evaluar = async (desde) => {
@@ -93,29 +93,41 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
 
   const pasar = async () => { await parar(); callar(); setConfirmarPasar(false); setTexto(''); onActualizar((actual) => pasarConcepto(actual)); };
 
+  const estado = evaluando ? 'escribiendo…' : fin ? 'Interrogatorio terminado' : oyendo ? 'escuchándole…' : `Pregunta ${oral.actual + 1} de ${oral.conceptos.length}`;
+  const enviarConEnter = (e) => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia?.('(pointer:fine)').matches) { e.preventDefault(); if (!evaluando && palabras(texto) >= 2) entregar(texto); } };
+  const crecer = (el) => { if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 150) + 'px'; };
+  const visibles = oral.conceptos.map((k, i) => ({ k, i })).filter(({ i }) => i <= oral.actual);
+
   return (
     <div className="page oral">
-      <div className="bar">
+      <div className="chat-head">
         <button className="ibtn" aria-label="Salir del interrogatorio" onClick={onBack}><Back /></button>
-        <div className="crumb" style={{ flex: 1, minWidth: 0 }}>Interrogatorio · {oral.titulo}</div>
+        <div className="avatar" aria-hidden="true">Pr</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="chat-nombre">Profesor</div>
+          <div className={'chat-estado' + (evaluando ? ' esc' : '')} role="status">{estado}</div>
+        </div>
         {puedeOfrecerVoz() && <button className={'ibtn' + (voz ? ' on' : '')} aria-pressed={!!voz} aria-label={voz ? 'Apagar la voz del profesor' : 'Activar la voz del profesor'} title="Voz del profesor" onClick={() => { callar(); if (!voz && motor.tipo === 'ninguno') { setEligiendoVoz(true); onActualizar((o) => ({ ...o, voz: true })); return; } onActualizar((o) => ({ ...o, voz: !o.voz, manos: o.voz ? false : o.manos })); }}><Altavoz /></button>}
         <BotonPantallaCompleta />
       </div>
-
       <div className="oral-prog" role="progressbar" aria-valuemin={0} aria-valuemax={oral.conceptos.length} aria-valuenow={fin ? oral.conceptos.length : oral.actual} aria-label="Avance del interrogatorio">
         {oral.conceptos.map((k, i) => <i key={k.id} className={k.estado === 'listo' ? 'ok' : i === oral.actual && !fin ? 'now' : ''} />)}
       </div>
-      <div className="sub" style={{ marginTop: 8 }}>{fin ? 'Interrogatorio terminado' : `Pregunta ${oral.actual + 1} de ${oral.conceptos.length} · ${c.nombre}`}</div>
 
-      <section className="aula" aria-label="Conversación con el profesor" aria-live="polite">
-        {c.turnos.map((t, i) => (
-          <div key={i} className={'burbuja ' + t.rol}>
-            <div className="quien">{t.rol === 'profesor' ? 'Profesor' : 'Usted'}</div>
-            <div className="dicho">{t.texto}</div>
+      <section className="chat" ref={lista} aria-label="Conversación con el profesor" aria-live="polite">
+        <div className="chat-aviso">Interrogatorio oral · {oral.titulo}</div>
+        {visibles.map(({ k, i }) => (
+          <div key={k.id} className="chat-tema">
+            <div className="chat-sep"><span>Tema {i + 1} de {oral.conceptos.length} · {k.nombre}</span></div>
+            {k.turnos.map((t, j) => (
+              <div key={j} className={'msg ' + t.rol + (j > 0 && k.turnos[j - 1].rol === t.rol ? ' seguido' : '')}>
+                {t.rol === 'profesor' && <div className="avatar mini" aria-hidden="true">Pr</div>}
+                <div className="msg-b">{t.texto}</div>
+              </div>
+            ))}
           </div>
         ))}
-        {evaluando && <div className="burbuja profesor escribiendo"><div className="quien">Profesor</div><div className="dicho"><span className="puntos"><i /><i /><i /></span> Evaluando su respuesta… {seg} s</div></div>}
-        <div ref={fondo} />
+        {evaluando && <div className="msg profesor"><div className="avatar mini" aria-hidden="true">Pr</div><div className="msg-b escribiendo" aria-label="El profesor está escribiendo"><span className="puntos"><i /><i /><i /></span>{seg >= 6 && <span className="seg">{seg} s</span>}</div></div>}
       </section>
 
       {fin ? (
@@ -127,18 +139,17 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
         </div>
       ) : (
         <div className="oral-ctl">
-          <textarea className="exp oral-ta" value={texto} onChange={(e) => setTexto(e.target.value)} disabled={evaluando} aria-label="Su respuesta" placeholder={soportado() ? 'Responda hablando (micrófono) o escribiendo…' : 'Escriba su respuesta…'} />
-          {oyendo && <div className="sub escuchando" role="status">Escuchando…{manos ? ' Se enviará sola cuando termine de hablar.' : ''}</div>}
-          {error && <div className="notice" role="alert">{error}</div>}
-          <div className="two" style={{ alignItems: 'center', marginTop: 10 }}>
-            {soportado() && <button className="ibtn" style={{ flex: 'none', width: 56, height: 56, borderRadius: 18, color: oyendo ? 'var(--bad)' : 'var(--acc)' }} aria-label={oyendo ? 'Detener dictado' : 'Responder hablando'} onClick={oyendo ? parar : empezar} disabled={evaluando}>{oyendo ? <Stop /> : <Mic />}</button>}
-            {voz && <button className="ibtn" style={{ flex: 'none', width: 56, height: 56, borderRadius: 18 }} aria-label="Repetir la pregunta" title="Repetir la pregunta" onClick={() => hablar(pregunta)}><Altavoz /></button>}
-            <button className="btn" style={{ height: 56, borderRadius: 18 }} disabled={evaluando || palabras(texto) < 2} onClick={() => entregar(texto)}>{evaluando ? 'Evaluando…' : 'Responder'}</button>
+          {error && <div className="notice" role="alert" style={{ marginTop: 0, marginBottom: 8 }}>{error}</div>}
+          <div className="compositor">
+            <textarea ref={(el) => crecer(el)} rows={1} className="oral-ta" value={texto} onChange={(e) => { setTexto(e.target.value); crecer(e.target); }} onKeyDown={enviarConEnter} disabled={evaluando} aria-label="Su respuesta" placeholder={oyendo ? 'Escuchándole…' : soportado() ? 'Escriba o use el micrófono…' : 'Escriba su respuesta…'} />
+            {soportado() && <button className={'rbtn' + (oyendo ? ' rec' : '')} aria-label={oyendo ? 'Detener dictado' : 'Responder hablando'} onClick={oyendo ? parar : empezar} disabled={evaluando}>{oyendo ? <Stop /> : <Mic />}</button>}
+            <button className="rbtn enviar" aria-label="Enviar respuesta" disabled={evaluando || palabras(texto) < 2} onClick={() => entregar(texto)}><Enviar /></button>
           </div>
           <div className="oral-extra">
-            {voz && <div className="voz-linea"><span>Voz: <b>{motor.etiqueta}</b>{!motor.natural && ' · suena robótica'}</span> <button className="linkbtn" onClick={() => setEligiendoVoz(true)}>{motor.natural ? 'Cambiar' : 'Mejorar la voz'}</button></div>}
-            {puedeOfrecerVoz() && soportado() && <label className="check"><input type="checkbox" checked={!!manos} onChange={(e) => onActualizar((o) => ({ ...o, voz: e.target.checked ? true : o.voz, manos: e.target.checked }))} /><span>Manos libres: el profesor habla y su respuesta se envía sola al callar</span></label>}
-            <button className="linkbtn" disabled={evaluando} onClick={() => setConfirmarPasar(true)}>No sé, pasar a la siguiente</button>
+            {voz && <button className="chipmini" onClick={() => hablar(pregunta)}>↻ Repetir pregunta</button>}
+            {puedeOfrecerVoz() && soportado() && <button className={'chipmini' + (manos ? ' on' : '')} aria-pressed={!!manos} title="El profesor habla y su respuesta se envía sola al callar" onClick={() => onActualizar((o) => ({ ...o, voz: manos ? o.voz : true, manos: !manos }))}>Manos libres</button>}
+            {voz && <button className="chipmini" onClick={() => setEligiendoVoz(true)}>Voz: {motor.etiqueta}{!motor.natural ? ' ⚠' : ''}</button>}
+            <button className="chipmini" disabled={evaluando} onClick={() => setConfirmarPasar(true)}>No sé, pasar</button>
           </div>
         </div>
       )}

@@ -17,3 +17,4 @@ export const Expandir = () => <Svg><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 
 export const Contraer = () => <Svg><path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3" /></Svg>;
 export const Altavoz = () => <Svg><path d="M4 9v6h4l5 4V5L8 9zM16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></Svg>;
 export const Mover = () => <Svg><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" /></Svg>;
+export const Enviar = () => <Svg><path d="M12 19V5m0 0-6 6m6-6 6 6" /></Svg>;

@@ -1,19 +1,21 @@
 {
   "name": "estudia-con-feynman",
-  "version": "2.20.0",
+  "version": "2.21.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build && node scripts/make-update.mjs",
-    "test": "node --test tests/grade.test.js tests/concepts.test.js tests/ramos.test.js tests/quiz.test.js tests/ai.test.js tests/actualizar.test.js tests/autolocal.test.js tests/tope.test.js tests/archivos.test.js tests/mover.test.js tests/otra.test.js tests/casos.test.js tests/extension.test.js tests/notas.test.js tests/ampliar.test.js tests/oral.test.js"
+    "test": "node --test tests/grade.test.js tests/concepts.test.js tests/ramos.test.js tests/quiz.test.js tests/ai.test.js tests/actualizar.test.js tests/autolocal.test.js tests/tope.test.js tests/archivos.test.js tests/mover.test.js tests/otra.test.js tests/casos.test.js tests/extension.test.js tests/notas.test.js tests/ampliar.test.js tests/oral.test.js tests/hablar.test.js"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^7.0.1",
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
     "@capgo/capacitor-updater": "^8.53.0",
+    "@mintplex-labs/piper-tts-web": "^1.0.5",
     "@mlc-ai/web-llm": "^0.2.86",
+    "onnxruntime-web": "^1.18.0",
     "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

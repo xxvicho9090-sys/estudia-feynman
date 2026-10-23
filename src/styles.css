@@ -285,3 +285,9 @@ textarea.oral-ta{min-height:96px;max-height:200px;width:100%}
 .oral-ref b{color:var(--ink)}
 .oral-conv{margin-top:10px;font-size:14px}.oral-conv summary{cursor:pointer;font-weight:700;color:var(--acc-d)}
 .oral-conv p{margin:8px 0 0;line-height:1.5}.oral-conv p.alumno{color:var(--mut)}
+.voz-app{display:flex;gap:12px;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.voz-lista{display:flex;flex-direction:column;gap:6px;max-height:34vh;overflow-y:auto}
+.voz-op{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;border:1.5px solid var(--line);cursor:pointer}
+.voz-op.on{border-color:var(--acc);background:var(--acc-soft)}
+.voz-op input{accent-color:var(--acc);width:18px;height:18px}
+.voz-linea{font-size:13px;color:var(--mut);display:flex;gap:8px;align-items:center;flex-wrap:wrap}.voz-linea b{color:var(--ink)}

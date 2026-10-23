@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Back, Mic, Stop, Altavoz } from '../icons.jsx';
 import BotonPantallaCompleta from './BotonPantallaCompleta.jsx';
 import { empezarDictado, pararDictado, soportado } from '../lib/voice.js';
-import { hablar, callar, puedeHablar } from '../lib/hablar.js';
+import { hablar, callar, motorActual, puedeOfrecerVoz, alCambiarVoces } from '../lib/hablar.js';
+import { useVozNatural } from '../lib/vozNatural.js';
+import ElegirVoz from './ElegirVoz.jsx';
 import { calentar } from '../lib/ai.js';
 import { conceptoActual, ultimaPregunta, registrarRespuesta, aplicarEvaluacion, pasarConcepto } from '../lib/oral.js';
 import { evaluarRespuestaOral } from '../lib/oralIA.js';
@@ -21,12 +23,17 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
   const [error, setError] = useState('');
   const [seg, setSeg] = useState(0);
   const [confirmarPasar, setConfirmarPasar] = useState(false);
+  const [eligiendoVoz, setEligiendoVoz] = useState(false);
+  const [, redibujar] = useState(0);
+  useVozNatural(); // al terminar de descargar la voz natural, esta pantalla se actualiza sola
+  useEffect(() => alCambiarVoces(() => redibujar((x) => x + 1)), []);
   const base = useRef('');
   const abort = useRef(null);
   const silencio = useRef(null);
   const fondo = useRef(null);
   const ultimo = useRef({});
-  const voz = oral.voz && puedeHablar();
+  const motor = motorActual();
+  const voz = oral.voz && motor.tipo !== 'ninguno';
   const manos = oral.manos && voz && soportado();
   ultimo.current = { oral, manos };
 
@@ -91,7 +98,7 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
       <div className="bar">
         <button className="ibtn" aria-label="Salir del interrogatorio" onClick={onBack}><Back /></button>
         <div className="crumb" style={{ flex: 1, minWidth: 0 }}>Interrogatorio · {oral.titulo}</div>
-        {puedeHablar() && <button className={'ibtn' + (voz ? ' on' : '')} aria-pressed={!!voz} aria-label={voz ? 'Apagar la voz del profesor' : 'Activar la voz del profesor'} title="Voz del profesor" onClick={() => { callar(); onActualizar((o) => ({ ...o, voz: !o.voz, manos: o.voz ? false : o.manos })); }}><Altavoz /></button>}
+        {puedeOfrecerVoz() && <button className={'ibtn' + (voz ? ' on' : '')} aria-pressed={!!voz} aria-label={voz ? 'Apagar la voz del profesor' : 'Activar la voz del profesor'} title="Voz del profesor" onClick={() => { callar(); if (!voz && motor.tipo === 'ninguno') { setEligiendoVoz(true); onActualizar((o) => ({ ...o, voz: true })); return; } onActualizar((o) => ({ ...o, voz: !o.voz, manos: o.voz ? false : o.manos })); }}><Altavoz /></button>}
         <BotonPantallaCompleta />
       </div>
 
@@ -129,12 +136,14 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
             <button className="btn" style={{ height: 56, borderRadius: 18 }} disabled={evaluando || palabras(texto) < 2} onClick={() => entregar(texto)}>{evaluando ? 'Evaluando…' : 'Responder'}</button>
           </div>
           <div className="oral-extra">
-            {puedeHablar() && soportado() && <label className="check"><input type="checkbox" checked={!!manos} onChange={(e) => onActualizar((o) => ({ ...o, voz: e.target.checked ? true : o.voz, manos: e.target.checked }))} /><span>Manos libres: el profesor habla y su respuesta se envía sola al callar</span></label>}
+            {voz && <div className="voz-linea"><span>Voz: <b>{motor.etiqueta}</b>{!motor.natural && ' · suena robótica'}</span> <button className="linkbtn" onClick={() => setEligiendoVoz(true)}>{motor.natural ? 'Cambiar' : 'Mejorar la voz'}</button></div>}
+            {puedeOfrecerVoz() && soportado() && <label className="check"><input type="checkbox" checked={!!manos} onChange={(e) => onActualizar((o) => ({ ...o, voz: e.target.checked ? true : o.voz, manos: e.target.checked }))} /><span>Manos libres: el profesor habla y su respuesta se envía sola al callar</span></label>}
             <button className="linkbtn" disabled={evaluando} onClick={() => setConfirmarPasar(true)}>No sé, pasar a la siguiente</button>
           </div>
         </div>
       )}
 
+      {eligiendoVoz && <ElegirVoz onClose={() => setEligiendoVoz(false)} />}
       {confirmarPasar && (
         <div className="sheet" role="alertdialog" aria-modal="true" aria-label="Pasar de concepto" onClick={(e) => { if (e.target === e.currentTarget) setConfirmarPasar(false); }}>
           <div>

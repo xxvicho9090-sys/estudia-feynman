@@ -7,7 +7,9 @@ self.addEventListener('activate', (e) => e.waitUntil(
 ));
 self.addEventListener('fetch', (e) => {
   const u = new URL(e.request.url);
-  if (e.request.method !== 'GET' || u.origin !== location.origin || u.pathname.includes('/update/')) return;
+  // Motor de la voz natural (WebAssembly en CDN): se guarda para que la voz funcione sin internet.
+  const motorVoz = /(^|\.)cdnjs\.cloudflare\.com$|(^|\.)cdn\.jsdelivr\.net$/.test(u.hostname) && /onnxruntime-web|piper-wasm/.test(u.pathname);
+  if (e.request.method !== 'GET' || (u.origin !== location.origin && !motorVoz) || u.pathname.includes('/update/')) return;
   e.respondWith(
     fetch(e.request)
       .then((r) => { if (r.ok) { const c = r.clone(); caches.open(C).then((x) => x.put(e.request, c)); } return r; })

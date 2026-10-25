@@ -81,20 +81,45 @@ export const calentarLocal = () => prepararLocal();
 export const modeloPerdido = (e) => /not loaded|ModelNotLoaded|device.{0,12}lost|DeviceLost|out of memory|OutOfMemory/i.test(String(e?.message || e));
 export function reiniciarMotor() { try { worker?.terminate(); } catch { /* ya detenido */ } worker = null; motor = null; cargando = null; }
 
-export async function chatLocal(messages, signal, esquema, rapido) {
-  try { return await chatLocalUnaVez(messages, signal, esquema, rapido); } catch (e) {
-    if (e?.name === 'AbortError' || signal?.aborted || !modeloPerdido(e)) throw e;
-    reiniciarMotor();
-    return chatLocalUnaVez(messages, signal, esquema, rapido); // segundo intento con el motor recién cargado
+// En algunos dispositivos (se vio en una tablet) la decodificación guiada por esquema falla a medio camino con
+// «Grammar matcher rejected the newly sampled token». Ahí se sigue SIN esquema (el formato JSON lo pide el propio prompt y se valida después)
+// y se recuerda para ese dispositivo, para no volver a fallar y perder tiempo.
+export const errorGramatica = (e) => /grammar|rejected the newly sampled/i.test(String(e?.message || e));
+const GRAMATICA = 'feynman.localSinGramatica';
+const sinGramaticaGuardado = () => { try { return localStorage.getItem(GRAMATICA) === '1'; } catch { return false; } };
+const guardarSinGramatica = () => { try { localStorage.setItem(GRAMATICA, '1'); } catch { /* sin almacenamiento */ } };
+
+// Reintentos: sin esquema si falla la gramática, y con el motor recargado si la GPU perdió el modelo (cada remedio se usa una sola vez).
+export async function conRespaldo(intento, { signal, reiniciar = () => {}, sinEsquemaInicial = false, marcarSinEsquema = () => {} } = {}) {
+  let sinEsquema = sinEsquemaInicial;
+  let recargado = false;
+  for (let n = 0; n < 3; n++) {
+    try { return await intento(sinEsquema); } catch (e) {
+      if (e?.name === 'AbortError' || signal?.aborted) throw e;
+      if (errorGramatica(e) && !sinEsquema) { sinEsquema = true; marcarSinEsquema(); continue; }
+      if (modeloPerdido(e) && !recargado) { recargado = true; reiniciar(); continue; }
+      throw e;
+    }
   }
+  throw new Error('La IA offline no pudo responder.');
 }
 
-async function chatLocalUnaVez(messages, signal, esquema, rapido) {
+export function chatLocal(messages, signal, esquema, rapido) {
+  return conRespaldo((sinEsquema) => chatLocalUnaVez(messages, signal, esquema, rapido, sinEsquema), {
+    signal, reiniciar: reiniciarMotor, sinEsquemaInicial: sinGramaticaGuardado(), marcarSinEsquema: guardarSinGramatica,
+  });
+}
+
+async function chatLocalUnaVez(messages, signal, esquema, rapido, sinEsquema) {
   const m = await prepararLocal();
   const parar = () => m.interruptGenerate?.();
   signal?.addEventListener('abort', parar, { once: true });
   try {
-    const r = await m.chat.completions.create({ messages, temperature: rapido ? 0 : 0.2, max_tokens: rapido ? 700 : 1800, ...(esquema ? { response_format: { type: 'json_object', schema: JSON.stringify(esquema) } } : {}) });
+    if (sinEsquema) { try { await m.resetChat?.(); } catch { /* sin conversación previa */ } }
+    const usar = esquema && !sinEsquema;
+    // Sin esquema se refuerza en el último mensaje que la respuesta debe ser solo el JSON.
+    const msgs = esquema && sinEsquema ? messages.map((x, i) => (i === messages.length - 1 ? { ...x, content: x.content + '\n\nResponde únicamente con el JSON pedido, sin texto antes ni después.' } : x)) : messages;
+    const r = await m.chat.completions.create({ messages: msgs, temperature: rapido ? 0 : 0.2, max_tokens: rapido ? 700 : 1800, ...(usar ? { response_format: { type: 'json_object', schema: JSON.stringify(esquema) } } : {}) });
     return r.choices?.[0]?.message?.content ?? '';
   } finally { signal?.removeEventListener('abort', parar); }
 }

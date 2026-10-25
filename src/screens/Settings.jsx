@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Back, Check } from '../icons.jsx';
 import { SeccionInstalar } from './Instalar.jsx';
+import Traspaso from './Traspaso.jsx';
 import { PROVEEDORES, configurado, getClave, setClave, getOllama, setOllama, estadoOllama, detectarOllama, probar, ultimoUsado, proveedor, getLocalesPrimero, setLocalesPrimero } from '../lib/ai.js';
 import { useActualizacion, buscarActualizacion, aplicarActualizacion } from '../actualizar.js';
 import { useLocal, descargarLocal, detenerDescarga, borrarLocal, soporte, TAMANO } from '../lib/local.js';
@@ -168,6 +169,7 @@ export default function Settings({ onBack }) {
       <label className="check" style={{ marginTop: 16 }}><input type="checkbox" defaultChecked={getLocalesPrimero()} onChange={(e) => setLocalesPrimero(e.target.checked)} /> Usar primero las IAs locales (Ollama y la de la app) y dejar la nube de respaldo</label>
       <div className="sub" style={{ marginTop: 10, lineHeight: 1.5 }}>Tu explicación y el texto de tus PDFs se envían solo a la IA que uses para evaluarte (con las locales no sale de tu dispositivo). Nada se guarda en otro servidor.</div>
 
+      <Traspaso />
       <SeccionInstalar />
       <SeccionActualizar />
       <div style={{ marginTop: 'auto', paddingTop: 24 }} />

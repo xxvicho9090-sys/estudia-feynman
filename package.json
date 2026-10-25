@@ -1,12 +1,12 @@
 {
   "name": "estudia-con-feynman",
-  "version": "2.22.0",
+  "version": "2.23.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build && node scripts/make-update.mjs",
-    "test": "node --test tests/grade.test.js tests/concepts.test.js tests/ramos.test.js tests/quiz.test.js tests/ai.test.js tests/actualizar.test.js tests/autolocal.test.js tests/tope.test.js tests/archivos.test.js tests/mover.test.js tests/otra.test.js tests/casos.test.js tests/extension.test.js tests/notas.test.js tests/ampliar.test.js tests/oral.test.js tests/hablar.test.js"
+    "test": "node --test tests/grade.test.js tests/concepts.test.js tests/ramos.test.js tests/quiz.test.js tests/ai.test.js tests/actualizar.test.js tests/autolocal.test.js tests/tope.test.js tests/archivos.test.js tests/mover.test.js tests/otra.test.js tests/casos.test.js tests/extension.test.js tests/notas.test.js tests/ampliar.test.js tests/oral.test.js tests/hablar.test.js tests/copia.test.js"
   },
   "dependencies": {
     "@capacitor-community/speech-recognition": "^7.0.1",

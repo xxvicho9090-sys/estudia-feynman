@@ -1,6 +1,6 @@
 import { chat } from './ai.js';
-import { ESQ_ORAL } from './esquemas.js';
-import { conceptoActual, repreguntasQuedan, normalizarEvaluacion, esRepetida, mencionaMaterial, ESTILOS } from './oral.js';
+import { ESQ_ORAL, ESQ_ACLARACION } from './esquemas.js';
+import { conceptoActual, repreguntasQuedan, normalizarEvaluacion, normalizarAclaracion, esRepetida, mencionaMaterial, ESTILOS } from './oral.js';
 
 // El profesor evalúa lo último que dijo el alumno. Una sola llamada corta (valoración + reacción + repregunta), para que no se sienta lenta.
 const BASE = (quedan) => `Eres un profesor universitario que toma una INTERROGACIÓN ORAL a un alumno. Hablas de usted, con un tono profesional, sobrio y respetuoso, sin halagos exagerados. Te doy el MATERIAL de referencia del concepto que estás preguntando, lo conversado hasta ahora y la última respuesta del alumno.
@@ -38,6 +38,21 @@ export async function evaluarRespuestaOral(oral, { signal } = {}) {
     if (mencionaMaterial(ev.reaccion)) ev = { ...ev, reaccion: '' };
   }
   return ev;
+}
+
+// El alumno dijo «no entendí»: el profesor lo aclara con un CASO HIPOTÉTICO breve y cotidiano, sin dar la respuesta completa, y vuelve a preguntar de forma más sencilla.
+const SYS_ACLARAR = `Eres un profesor universitario en una interrogación oral. El alumno acaba de decir que NO ENTENDIÓ lo que le preguntaste. Te doy el MATERIAL de referencia del concepto y la conversación. Ayúdalo poniéndolo en un CASO HIPOTÉTICO:
+- "ejemplo": un caso hipotético breve y cotidiano (2 a 4 frases, máx. 70 palabras) con personas de nombre inventado (por ejemplo Ana, Luis) y, si hay dinero, en pesos chilenos que muestre en acción el concepto por el que preguntabas. Empieza directamente con el caso («Ana le entrega…», «Suponga que…»). NO des la definición completa ni la respuesta: el caso solo debe hacer visible la idea.
+- "pregunta": UNA pregunta sencilla y concreta sobre ese caso, que lo lleve a descubrir o aplicar el concepto (por ejemplo «¿qué está haciendo cada uno?» o «¿qué le parece que ocurre aquí y por qué?»).
+Responde SOLO JSON: {"ejemplo":"...","pregunta":"..."}. Tono profesional y amable, trato de usted. Usa SOLO el material de referencia, pero no lo menciones (nunca digas "según el material" ni "el texto"). Español.`;
+
+export async function aclararConcepto(oral, { signal } = {}) {
+  const c = conceptoActual(oral);
+  const user = `CONCEPTO: ${c.nombre}\nMATERIAL DE REFERENCIA:\n${c.referencia}\n\nCONVERSACIÓN:\n${lineas(c.turnos)}`;
+  const preguntar = (extra = '') => chat([{ role: 'system', content: SYS_ACLARAR }, { role: 'user', content: user + extra }], { signal, esquema: ESQ_ACLARACION, rapido: true }).then(normalizarAclaracion);
+  let a = await preguntar();
+  if (mencionaMaterial(`${a.ejemplo} ${a.pregunta}`)) a = await preguntar('\n\nNo menciones "el material" ni "el texto": cuenta el caso directamente.');
+  return a;
 }
 
 export { ESTILOS };

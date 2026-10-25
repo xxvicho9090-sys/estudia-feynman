@@ -6,8 +6,8 @@ import { hablar, callar, motorActual, puedeOfrecerVoz, alCambiarVoces } from '..
 import { useVozNatural } from '../lib/vozNatural.js';
 import ElegirVoz from './ElegirVoz.jsx';
 import { calentar } from '../lib/ai.js';
-import { conceptoActual, ultimaPregunta, registrarRespuesta, aplicarEvaluacion, pasarConcepto } from '../lib/oral.js';
-import { evaluarRespuestaOral } from '../lib/oralIA.js';
+import { conceptoActual, ultimaPregunta, registrarRespuesta, aplicarEvaluacion, aplicarAclaracion, pideAclaracion, aclaracionesQuedan, pasarConcepto } from '../lib/oral.js';
+import { evaluarRespuestaOral, aclararConcepto } from '../lib/oralIA.js';
 
 const palabras = (t) => (t.trim() ? t.trim().split(/\s+/).length : 0);
 const SILENCIO_MS = 2800; // en manos libres: tras este silencio se entrega la respuesta
@@ -53,8 +53,16 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
     setError(''); setEvaluando(true);
     abort.current = new AbortController();
     try {
-      const ev = await evaluarRespuestaOral(desde, { signal: abort.current.signal });
-      onActualizar((actual) => aplicarEvaluacion(actual, ev));
+      const turnos = conceptoActual(desde).turnos;
+      const ultimaFrase = turnos[turnos.length - 1]?.texto;
+      // «No entendí»: el profesor lo explica con un caso hipotético y repregunta, sin tratarlo como una respuesta mala.
+      if (pideAclaracion(ultimaFrase) && aclaracionesQuedan(desde) > 0) {
+        const a = await aclararConcepto(desde, { signal: abort.current.signal });
+        onActualizar((actual) => aplicarAclaracion(actual, a));
+      } else {
+        const ev = await evaluarRespuestaOral(desde, { signal: abort.current.signal });
+        onActualizar((actual) => aplicarEvaluacion(actual, ev));
+      }
     } catch (e) {
       if (e?.name !== 'AbortError') setError(e?.message || 'No pude evaluar su respuesta.');
     } finally { setEvaluando(false); }

@@ -90,8 +90,36 @@ export function esRepetida(nueva, previas) {
 // El profesor no debe delatar que lee un material («según el material», «el texto»…).
 export const mencionaMaterial = (t) => /\b(el|del|al|este|ese) (material|texto|apunte|pdf)\b/i.test(t);
 
+// ---- «No entendí»: el profesor lo explica con un caso hipotético y vuelve a preguntar (no cuenta como respuesta ni gasta contrapreguntas) ----
+export const ACLARACIONES_MAX = 3;
+const PIDE_ACLARACION = /(no\s+(lo\s+|la\s+|le\s+|te\s+)?(he\s+)?(entend|comprend|captad|capt[eé])|no\s+(me\s+)?qued[oó]\s+clar|no\s+entiendo|no\s+comprendo|no\s+(s[eé]|sabr[ií]a)\s+(a\s+)?qu[eé]\s+(se\s+)?(refiere|quiere|pregunta)|no\s+(s[eé]|entiendo)\s+(qu[eé]|a\s+qu[eé])\s+(me\s+)?(pregunta|pide)|(puede|podr[ií]a)\s+(repetir|explicar|aclarar|darme\s+un\s+ejemplo)|me\s+(puede|podr[ií]a)\s+(repetir|explicar|dar)|p[oó]ngame\s+un\s+ejemplo|un\s+ejemplo,?\s+por\s+favor|expl[ií]queme|repita)/i;
+// Solo cuenta si es un mensaje corto (una respuesta larga que mencione «no entendí» sigue siendo una respuesta).
+export const pideAclaracion = (texto) => { const t = String(texto || ''); return t.trim().split(/\s+/).length <= 25 && PIDE_ACLARACION.test(t); };
+export const aclaracionesQuedan = (oral) => Math.max(0, ACLARACIONES_MAX - (conceptoActual(oral).aclar || 0));
+
+export function normalizarAclaracion(crudo) {
+  const o = extraerJson(crudo);
+  const t = (x, max) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
+  const ejemplo = t(o?.ejemplo, 700);
+  const pregunta = soloUnaPregunta(t(o?.pregunta, 260));
+  if (ejemplo.length < 20 || !pregunta) throw new Error('El profesor no entregó un ejemplo válido');
+  return { ejemplo, pregunta };
+}
+
+// Anota la aclaración: la última frase del alumno queda como «aclaración» (sin nota) y el profesor responde con el caso y una pregunta sencilla.
+export function aplicarAclaracion(oral, { ejemplo, pregunta }) {
+  const c0 = conceptoActual(oral);
+  const turnos = [...c0.turnos];
+  const i = turnos.map((t) => t.rol).lastIndexOf('alumno');
+  turnos[i] = { ...turnos[i], val: 'aclaracion' };
+  const intro = ['Claro, se lo explico con un caso.', 'Por supuesto, veámoslo con un ejemplo.', 'Sin problema. Imagine esto.'][(c0.aclar || 0) % 3];
+  const c = { ...c0, aclar: (c0.aclar || 0) + 1, turnos: [...turnos, { rol: 'profesor', texto: `${intro} ${ejemplo} ${pregunta}` }] };
+  const conceptos = oral.conceptos.map((x, k) => (k === oral.actual ? c : x));
+  return { ...oral, conceptos };
+}
+
 export function puntajeConcepto(c) {
-  const vals = c.turnos.filter((t) => t.rol === 'alumno' && t.val).map((t) => PUNTOS[t.val]);
+  const vals = c.turnos.filter((t) => t.rol === 'alumno' && t.val in PUNTOS).map((t) => PUNTOS[t.val]);
   if (!vals.length) return 0;
   if (vals.length === 1) return vals[0];
   // Pesa más cómo terminas que cómo empiezas: la repregunta es para rescatar. Con varias contrapreguntas cuenta el promedio de lo que vino después.

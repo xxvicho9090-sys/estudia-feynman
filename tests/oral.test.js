@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { elegirConceptos, nuevoOral, registrarRespuesta, aplicarEvaluacion, pasarConcepto, puntajeConcepto, resultadoOral, normalizarEvaluacion, esRepetida, mencionaMaterial, repreguntasQuedan, conceptoActual, conceptosUsados, saludo, CIERRE } from '../src/lib/oral.js';
+import { elegirConceptos, nuevoOral, registrarRespuesta, aplicarEvaluacion, pasarConcepto, puntajeConcepto, resultadoOral, normalizarEvaluacion, esRepetida, mencionaMaterial, pideAclaracion, aplicarAclaracion, aclaracionesQuedan, normalizarAclaracion, ACLARACIONES_MAX, repreguntasQuedan, conceptoActual, conceptosUsados, saludo, CIERRE } from '../src/lib/oral.js';
 
 const docs = [
   { id: 'd1', nombre: 'Contratos', conceptos: [
@@ -144,4 +144,43 @@ test('el profesor no delata que lee un material', () => {
   assert.equal(mencionaMaterial('¿Cómo se relaciona esto con la definición del material?'), true);
   assert.equal(mencionaMaterial('Según el texto, ¿qué es la compraventa?'), true);
   assert.equal(mencionaMaterial('¿Qué obligaciones tiene el mandatario?'), false);
+});
+
+test('detecta cuándo el alumno dice que no entendió (y no confunde una respuesta larga)', () => {
+  for (const t of ['No entendí', 'no entendí la pregunta', 'Disculpe, no comprendo qué me pregunta', 'No me quedó claro', 'No entiendo', '¿Me puede dar un ejemplo?', 'Explíqueme por favor', 'no sé a qué se refiere']) assert.equal(pideAclaracion(t), true, t);
+  for (const t of ['Es un contrato en que una parte da una cosa y la otra la paga', 'No sé', 'Creo que es bilateral']) assert.equal(pideAclaracion(t), false, t);
+  const larga = 'Es un contrato donde uno entrega una cosa y el otro paga un precio en dinero y por eso se perfecciona con el acuerdo, aunque a veces no entendí bien lo de la escritura pública en bienes raíces';
+  assert.equal(pideAclaracion(larga), false);
+});
+
+test('la aclaración da un caso hipotético, no gasta contrapreguntas ni cuenta como respuesta', () => {
+  let o = nuevo('riguroso');
+  o = registrarRespuesta(o, 'No entendí');
+  o = aplicarAclaracion(o, { ejemplo: 'Ana le entrega su bicicleta a Luis y Luis le paga cien mil pesos.', pregunta: '¿Qué hace cada uno en este caso?' });
+  const c = conceptoActual(o);
+  assert.equal(c.aclar, 1);
+  assert.equal(c.rep, 0);
+  assert.equal(repreguntasQuedan(o), 2);
+  assert.equal(c.turnos[c.turnos.length - 2].val, 'aclaracion');
+  const ultimo = c.turnos[c.turnos.length - 1];
+  assert.equal(ultimo.rol, 'profesor');
+  assert.match(ultimo.texto, /Ana le entrega su bicicleta/);
+  assert.match(ultimo.texto, /¿Qué hace cada uno en este caso\?$/);
+  assert.equal(puntajeConcepto(c), 0); // sin respuestas evaluadas todavía
+  assert.equal(aclaracionesQuedan(o), 2);
+  // después responde y se evalúa normalmente
+  o = aplicarEvaluacion(registrarRespuesta(o, 'Uno entrega la cosa y el otro paga'), ev('correcta'));
+  assert.equal(o.conceptos[0].puntaje, 1);
+});
+
+test('hay un tope de aclaraciones por concepto', () => {
+  let o = nuevo('cordial');
+  for (let i = 0; i < ACLARACIONES_MAX; i++) o = aplicarAclaracion(registrarRespuesta(o, 'no entendí'), { ejemplo: 'Un caso de ejemplo con suficientes palabras.', pregunta: '¿Y entonces?' });
+  assert.equal(aclaracionesQuedan(o), 0);
+});
+
+test('normalizarAclaracion exige un ejemplo y una pregunta', () => {
+  const a = normalizarAclaracion('{"ejemplo":"Ana vende su auto a Luis por un millón de pesos.","pregunta":"¿Qué obligaciones tiene cada uno? ¿Y el juez?"}');
+  assert.equal(a.pregunta, '¿Qué obligaciones tiene cada uno?');
+  assert.throws(() => normalizarAclaracion('{"ejemplo":"corto","pregunta":""}'));
 });

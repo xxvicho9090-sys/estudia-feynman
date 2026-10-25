@@ -7,10 +7,11 @@ import { formatoNota } from '../lib/grade.js';
 const LETRAS = ['A', 'B', 'C', 'D', 'E'];
 const pts = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 
-// Una hoja de la prueba, con aspecto de papel. modo: 'rendir' (se responde) | 'corregida' (con correcciones en rojo).
+// Una hoja de la prueba, con aspecto de papel. modo: 'rendir' (se responde) | 'corregida' (con tus respuestas y las correcciones en rojo) | 'solucion' (las respuestas correctas de la IA).
 export default function Hoja({ prueba, paginas, indice, modo, onResp, resumen }) {
   const pag = paginas[indice];
   const corr = modo === 'corregida';
+  const sol = modo === 'solucion';
   const secciones = SECCIONES.filter((t) => prueba.preguntas.some((p) => seccionDe(p) === t));
   return (
     <article className="hoja" aria-label={`Hoja ${indice + 1} de ${paginas.length}`}>
@@ -18,7 +19,7 @@ export default function Hoja({ prueba, paginas, indice, modo, onResp, resumen })
         <header className="hoja-head">
           <div className="hh-top">
             <div>
-              <div className="hh-kicker">Prueba de Derecho</div>
+              <div className="hh-kicker">{sol ? 'Pauta de respuestas · IA' : 'Prueba de Derecho'}</div>
               <h2 className="hh-titulo">{prueba.titulo}</h2>
             </div>
             {corr && resumen?.nota != null && <div className="sello" aria-label={`Nota ${formatoNota(resumen.nota)}`}><span>{formatoNota(resumen.nota)}</span></div>}
@@ -41,7 +42,7 @@ export default function Hoja({ prueba, paginas, indice, modo, onResp, resumen })
             </div>
           )}
           {p.caso && pag.preguntas[k - 1]?.p.caso?.id !== p.caso.id && <CasoBox caso={p.caso} continuacion={p.casoOrden > 0} compacto={esLargo(p.caso) && p.casoOrden > 0} />}
-          <Pregunta p={p} n={n} modo={modo} respuesta={prueba.respuestas?.[p.id]} evaluacion={prueba.evaluaciones?.[p.id]} onResp={(v) => onResp?.(p.id, v)} />
+          <Pregunta p={p} n={n} modo={modo} respuesta={prueba.respuestas?.[p.id]} evaluacion={prueba.evaluaciones?.[p.id]} modelo={prueba.modelos?.[p.id]} onResp={(v) => onResp?.(p.id, v)} />
         </section>
       ))}
       <footer className="hoja-pie">Hoja {indice + 1} de {paginas.length}</footer>
@@ -55,8 +56,10 @@ function Marca({ p, respuesta, evaluacion }) {
   return <span className={'roja' + (r.puntos >= r.max * 0.999 ? ' bien' : '')}>{pts(r.puntos)}/{r.max}</span>;
 }
 
-export function Pregunta({ p, n, modo, respuesta, evaluacion, onResp }) {
+export function Pregunta({ p, n, modo, respuesta, evaluacion, modelo, onResp }) {
   const corr = modo === 'corregida';
+  const sol = modo === 'solucion';
+  const fija = corr || sol; // hoja de solo lectura
   return (
     <div className="q">
       <div className="q-enun"><span className="q-n">{n}.</span><span>{p.enunciado}</span>{corr && <Marca p={p} respuesta={respuesta} evaluacion={evaluacion} />}</div>
@@ -64,12 +67,12 @@ export function Pregunta({ p, n, modo, respuesta, evaluacion, onResp }) {
       {p.tipo === 'alternativas' && (
         <div className="ops" role="radiogroup" aria-label={`Alternativas de la pregunta ${n}`}>
           {p.opciones.map((o, i) => {
-            const marcada = respuesta === i;
-            const cls = 'op' + (marcada ? ' marcada' : '') + (corr && i === p.correcta ? ' correcta' : '') + (corr && marcada && i !== p.correcta ? ' mala' : '');
+            const marcada = !sol && respuesta === i;
+            const cls = 'op' + (marcada ? ' marcada' : '') + ((corr || sol) && i === p.correcta ? ' correcta' : '') + (corr && marcada && i !== p.correcta ? ' mala' : '');
             return (
-              <button key={i} role="radio" aria-checked={marcada} className={cls} disabled={corr} onClick={() => onResp(marcada ? undefined : i)}>
+              <button key={i} role="radio" aria-checked={marcada || (sol && i === p.correcta)} className={cls} disabled={fija} onClick={() => onResp(marcada ? undefined : i)}>
                 <span className="burbuja">{LETRAS[i]}</span><span className="op-t">{o}</span>
-                {corr && i === p.correcta && <span className="roja bien" aria-label="correcta">✓</span>}
+                {(corr || sol) && i === p.correcta && <span className="roja bien" aria-label="correcta">✓</span>}
                 {corr && marcada && i !== p.correcta && <span className="roja" aria-label="incorrecta">✗</span>}
               </button>
             );
@@ -80,12 +83,12 @@ export function Pregunta({ p, n, modo, respuesta, evaluacion, onResp }) {
       {p.tipo === 'vf' && (
         <div className="vf" role="radiogroup" aria-label={`Verdadero o falso, pregunta ${n}`}>
           {[[true, 'V', 'Verdadero'], [false, 'F', 'Falso']].map(([val, l, nombre]) => {
-            const marcada = respuesta === val;
-            const cls = 'op' + (marcada ? ' marcada' : '') + (corr && val === p.correcta ? ' correcta' : '') + (corr && marcada && val !== p.correcta ? ' mala' : '');
+            const marcada = !sol && respuesta === val;
+            const cls = 'op' + (marcada ? ' marcada' : '') + ((corr || sol) && val === p.correcta ? ' correcta' : '') + (corr && marcada && val !== p.correcta ? ' mala' : '');
             return (
-              <button key={l} role="radio" aria-checked={marcada} className={cls} disabled={corr} onClick={() => onResp(marcada ? undefined : val)}>
+              <button key={l} role="radio" aria-checked={marcada || (sol && val === p.correcta)} className={cls} disabled={fija} onClick={() => onResp(marcada ? undefined : val)}>
                 <span className="burbuja">{l}</span><span className="op-t">{nombre}</span>
-                {corr && val === p.correcta && <span className="roja bien" aria-label="correcta">✓</span>}
+                {(corr || sol) && val === p.correcta && <span className="roja bien" aria-label="correcta">✓</span>}
                 {corr && marcada && val !== p.correcta && <span className="roja" aria-label="incorrecta">✗</span>}
               </button>
             );
@@ -93,9 +96,10 @@ export function Pregunta({ p, n, modo, respuesta, evaluacion, onResp }) {
         </div>
       )}
 
-      {p.tipo === 'desarrollo' && <Desarrollo valor={respuesta || ''} onChange={onResp} corr={corr} n={n} filas={p.caso ? FILAS_CASO : 8} />}
+      {p.tipo === 'desarrollo' && !sol && <Desarrollo valor={respuesta || ''} onChange={onResp} corr={corr} n={n} filas={p.caso ? FILAS_CASO : 8} />}
 
       {corr && <Correccion p={p} respuesta={respuesta} evaluacion={evaluacion} />}
+      {sol && <Solucion p={p} modelo={modelo} />}
     </div>
   );
 }
@@ -157,6 +161,26 @@ function Correccion({ p, respuesta, evaluacion }) {
           {i.comentario && <span className="expl"> — {i.comentario}</span>}
         </div>
       ))}
+    </div>
+  );
+}
+
+// Pauta de respuestas: la respuesta correcta de la IA con su explicación; en desarrollo y casos, la respuesta modelo y las ideas clave.
+function Solucion({ p, modelo }) {
+  if (p.tipo === 'desarrollo') {
+    return (
+      <div className="modelo">
+        <div className="modelo-t">Respuesta modelo</div>
+        {modelo ? <p className="modelo-txt">{modelo}</p> : <p className="modelo-vacia">Todavía no está redactada completa: toca “Redactar respuestas completas” arriba. Mientras tanto, estas son las ideas clave.</p>}
+        <div className="modelo-t" style={{ marginTop: 8 }}>Ideas clave que debía incluir</div>
+        <ul>{p.pauta.map((x, k) => <li key={k}>{x}</li>)}</ul>
+      </div>
+    );
+  }
+  return (
+    <div className="modelo">
+      <div className="modelo-t">Respuesta correcta: {p.tipo === 'vf' ? (p.correcta ? 'Verdadero' : 'Falso') : `${LETRAS[p.correcta]}) ${p.opciones[p.correcta]}`}</div>
+      {p.explicacion && <p className="modelo-txt">{p.explicacion}</p>}
     </div>
   );
 }

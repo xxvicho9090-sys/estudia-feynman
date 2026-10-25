@@ -1,6 +1,6 @@
 import { extraerJson, parseEvaluacion } from './grade.js';
 import { chat, AiError } from './ai.js';
-import { ESQ_CONCEPTOS, ESQ_EVALUACION, ESQ_TIPO } from './esquemas.js';
+import { ESQ_CONCEPTOS, ESQ_EVALUACION, ESQ_TIPO, ESQ_MODELO } from './esquemas.js';
 
 // Tareas de estudio (conceptos, evaluación, pruebas). La conexión con las IAs y el respaldo automático están en ai.js.
 export { AiError };
@@ -64,6 +64,18 @@ Responde SOLO JSON: {"preguntas":[{"enunciado":"...","pauta":["idea clave 1","id
 export async function generarPreguntasDeTipo(tipo, n, material, { evitar = [], porCaso = 3, extension = 'breve', ...opts } = {}) {
   const out = await chat([{ role: 'system', content: SYS_TIPO[tipo](n, porCaso, extension) }, { role: 'user', content: (evitar.length ? `PREGUNTAS YA USADAS EN OTRAS PRUEBAS (no las repitas ni hagas versiones casi iguales; pregunta otros aspectos del material):\n${evitar.slice(0, 25).map((t) => `- ${t.slice(0, 110)}`).join('\n')}\n\n` : '') + `MATERIAL:\n${material}` }], { ...opts, esquema: ESQ_TIPO[tipo] });
   return extraerJson(out);
+}
+
+// Respuesta modelo de una pregunta de desarrollo (o de caso): lo que respondería un alumno excelente, redactado completo a partir de la pauta.
+export async function redactarRespuestaModelo(pregunta, material, opts) {
+  const caso = pregunta.caso ? `CASO PRÁCTICO (${pregunta.caso.titulo}): ${pregunta.caso.hechos}\n\n` : '';
+  const sys = 'Eres un profesor que escribe la RESPUESTA MODELO de una pregunta de desarrollo para que el alumno compare con la suya. Redacta, en primera persona y en prosa fluida (uno o dos párrafos, 110 a 230 palabras), la respuesta completa de un alumno excelente: debe incluir TODAS las ideas de la pauta, explicarlas con claridad y, si hay un caso, aplicarlas a sus hechos. Sin títulos ni viñetas. Usa SOLO el material y la pauta; no inventes normas, plazos ni cifras. Responde SOLO JSON: {"respuesta":"..."}. Español.';
+  const pauta = pregunta.pauta.map((p) => `- ${p}`).join('\n');
+  const user = `${caso}PREGUNTA: ${pregunta.enunciado}\n\nIDEAS QUE DEBE CONTENER (pauta):\n${pauta}${material ? `\n\nMATERIAL DE REFERENCIA:\n${material}` : ''}`;
+  const out = await chat([{ role: 'system', content: sys }, { role: 'user', content: user }], { ...opts, esquema: ESQ_MODELO });
+  const texto = String(extraerJson(out)?.respuesta ?? '').trim();
+  if (texto.length < 40) throw new Error('La IA no redactó la respuesta. Inténtalo de nuevo.');
+  return texto;
 }
 
 // Corrige una respuesta de desarrollo contra la pauta (misma salida que evaluarExplicacion).

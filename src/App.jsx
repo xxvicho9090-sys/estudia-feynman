@@ -13,7 +13,8 @@ import { listarDocs, guardarDoc, borrarDoc, listarRamos, guardarRamo, borrarRamo
 import { nuevoOral, conceptosUsados } from './lib/oral.js';
 import { puedeHablar } from './lib/hablar.js';
 import { crearPrueba, corregirPrueba, ampliarPrueba } from './lib/pruebas.js';
-import { detectarOllama } from './lib/ai.js';
+import { redactarRespuestaModelo } from './lib/groq.js';
+import { detectarOllama, soloLocal } from './lib/ai.js';
 import { iniciarAutoLocal } from './lib/autolocal.js';
 import { useLocal } from './lib/local.js';
 import { useActualizacion, aplicarActualizacion } from './actualizar.js';
@@ -22,7 +23,7 @@ import { nuevoId } from './lib/concepts.js';
 import { nuevoRamo, reiniciarNotasDe, restaurarNotasDe } from './lib/ramos.js';
 import { resumenSubida } from './lib/archivos.js';
 import { docsAMover, textoMovido } from './lib/mover.js';
-import { mismoOrigen, docsDeOrigen, paginar } from './lib/quiz.js';
+import { mismoOrigen, docsDeOrigen, paginar, armarMaterial } from './lib/quiz.js';
 import { notaDeIdeas } from './lib/grade.js';
 
 const HOME = { name: 'home' };
@@ -41,6 +42,7 @@ export default function App() {
   const [tab, setTab] = useState('estudiar');
   const [pruebas, setPruebas] = useState([]);
   const [errorPrueba, setErrorPrueba] = useState('');
+  const [redactando, setRedactando] = useState(null); // { pid, hechas, total } mientras se redactan las respuestas de la IA
   const [orales, setOrales] = useState([]);
   const [errorOral, setErrorOral] = useState('');
   const oralesRef = useRef([]);
@@ -284,6 +286,8 @@ export default function App() {
       pruebasRef.current = pruebasRef.current.map((x) => (x.id === nueva.id ? nueva : x)); setPruebas(pruebasRef.current);
       setErrorCorreccion(error);
       reemplazar({ name: 'prueba-result', pruebaId: nueva.id });
+      // Con una IA en la nube las respuestas completas salen rápido: se redactan solas mientras revisas tu corrección. Con la IA offline queda el botón.
+      if (!soloLocal() && nueva.preguntas.some((q) => q.tipo === 'desarrollo')) redactarModelos(nueva.id, { silencioso: true });
     } finally { setTrabajando(null); }
   };
   // Agrega preguntas a una prueba ya creada. Devuelve un mensaje de error (para mostrarlo en la hoja) o null si salió bien.
@@ -310,6 +314,30 @@ export default function App() {
       if (e?.name === 'AbortError') return null;
       return e?.message || 'No se pudieron agregar las preguntas.';
     } finally { setTrabajando(null); }
+  };
+  // Redacta completas las respuestas modelo de los desarrollos y casos (la pauta de la IA), una por una, y las deja guardadas en la prueba.
+  const redactarModelos = async (pid, { silencioso = false } = {}) => {
+    const prueba = pruebasRef.current.find((x) => x.id === pid);
+    if (!prueba) return;
+    const pend = prueba.preguntas.filter((q) => q.tipo === 'desarrollo' && !prueba.modelos?.[q.id]);
+    if (!pend.length) return;
+    const ac = new AbortController();
+    if (!silencioso) abortPrueba.current = ac;
+    const titulo = 'Redactando respuestas';
+    const docsOrigen = docsDeOrigen(prueba.origen, docs, ramos);
+    try {
+      for (let i = 0; i < pend.length; i++) {
+        if (silencioso) setRedactando({ pid, hechas: i, total: pend.length });
+        else setTrabajando({ titulo, texto: `Redactando la respuesta ${i + 1} de ${pend.length}…`, fraccion: i / pend.length });
+        const q = pend[i];
+        // Material de referencia: el concepto al que se refiere la pregunta (si se encuentra), para que la respuesta se apoye en tus apuntes.
+        const conc = docsOrigen.flatMap((d) => d.conceptos).find((c) => c.nombre === q.concepto);
+        const texto = await redactarRespuestaModelo(q, conc?.referencia || armarMaterial(docsOrigen, 3500).texto, { signal: ac.signal });
+        actualizarPrueba(pid, (x) => ({ ...x, modelos: { ...(x.modelos || {}), [q.id]: texto } }));
+      }
+    } catch (e) {
+      if (e?.name !== 'AbortError') setToast(e?.message || 'No se pudieron redactar las respuestas.');
+    } finally { if (silencioso) setRedactando(null); else setTrabajando(null); }
   };
   const abrirPrueba = (p) => ir(p.estado === 'en curso' ? { name: 'rendir', pruebaId: p.id } : { name: 'prueba-result', pruebaId: p.id });
   // "Otra prueba distinta": misma configuración y material, preguntas nuevas (y conceptos que aún no practicaste primero).
@@ -374,7 +402,7 @@ export default function App() {
   let vista;
   if (screen.name === 'settings') vista = <Settings onBack={volver} />;
   else if (screen.name === 'rendir' && pruebaDe(screen.pruebaId)) vista = <Rendir key={`${screen.pruebaId}:${pruebaDe(screen.pruebaId).preguntas.length}`} prueba={pruebaDe(screen.pruebaId)} onAmpliar={(plan) => ampliar(screen.pruebaId, plan)} onChange={actualizarPrueba} onBack={volverAPruebas} onEntregar={() => corregir({ ...pruebaDe(screen.pruebaId), entregada: Date.now() })} />;
-  else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} onAmpliar={(plan) => ampliar(screen.pruebaId, plan)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} onOtra={() => generarOtra(pruebaDe(screen.pruebaId))} />;
+  else if (screen.name === 'prueba-result' && pruebaDe(screen.pruebaId)) vista = <ResultadoPrueba key={screen.pruebaId} prueba={pruebaDe(screen.pruebaId)} onAmpliar={(plan) => ampliar(screen.pruebaId, plan)} corrigiendo={!!trabajando} error={errorCorreccion} onCorregir={() => corregir(pruebaDe(screen.pruebaId))} onRedactar={() => redactarModelos(screen.pruebaId)} redactando={redactando?.pid === screen.pruebaId ? redactando : null} onVolver={volverAPruebas} onRepetir={() => rendirDeNuevo(pruebaDe(screen.pruebaId))} onOtra={() => generarOtra(pruebaDe(screen.pruebaId))} />;
   else if (screen.name === 'oral' && oralDe(screen.oralId)) vista = <Oral key={screen.oralId} oral={oralDe(screen.oralId)} onActualizar={(fn) => actualizarOral(screen.oralId, fn)} onBack={volverAOral} onResultado={() => reemplazar({ name: 'oral-result', oralId: screen.oralId })} />;
   else if (screen.name === 'oral-result' && oralDe(screen.oralId)?.resultado) vista = <ResultadoOral key={screen.oralId} oral={oralDe(screen.oralId)} onVolver={volverAOral} onOtro={() => otroOral(oralDe(screen.oralId))} />;
   else if (screen.name === 'explain' && c) vista = <Explain key={screen.conceptId} doc={docDe(screen.docId)} concepto={c} indice={indice(screen)} onBack={volver} onResult={(t, ev) => resultado(screen, ev)} onGo={(id) => reemplazar({ name: 'explain', docId: screen.docId, conceptId: id })} />;
@@ -425,7 +453,7 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><div className="spin" /><b style={{ fontSize: 18 }}>{trabajando.titulo}</b></div>
             <div className="sub" style={{ marginTop: 10 }}>{trabajando.texto}</div>
             <div className="prog" style={{ marginTop: 14, height: 8 }}><i style={{ width: `${Math.round(trabajando.fraccion * 100)}%` }} /></div>
-            {/^(Creando|Agregando)/.test(trabajando.titulo) && <button className="linkbtn" style={{ marginTop: 16 }} onClick={() => abortPrueba.current?.abort()}>Cancelar</button>}
+            {/^(Creando|Agregando|Redactando)/.test(trabajando.titulo) && <button className="linkbtn" style={{ marginTop: 16 }} onClick={() => abortPrueba.current?.abort()}>Cancelar</button>}
           </div>
         </div>
       )}

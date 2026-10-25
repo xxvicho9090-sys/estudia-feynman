@@ -18,3 +18,4 @@ export const ESQ_CASOS = obj({ casos: arr(obj({ titulo: S, hechos: S, preguntas:
 export const ESQ_TIPO = { alternativas: ESQ_ALTERNATIVAS, vf: ESQ_VF, desarrollo: ESQ_DESARROLLO, caso: ESQ_CASOS };
 export const ESQ_ORAL = obj({ valoracion: { type: 'string', enum: ['correcta', 'parcial', 'incorrecta'] }, reaccion: S, repregunta: S, observacion: S });
 export const ESQ_ACLARACION = obj({ ejemplo: S, pregunta: S });
+export const ESQ_MODELO = obj({ respuesta: S });

@@ -9,7 +9,7 @@ import { formatoNota, mensajeNota } from '../lib/grade.js';
 const pts = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 
 // Prueba corregida: resumen con la nota y la prueba en hojas, con las correcciones en rojo.
-export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir, onVolver, onRepetir, onOtra, onAmpliar }) {
+export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir, onVolver, onRepetir, onOtra, onAmpliar, onRedactar, redactando }) {
   const [agregar, setAgregar] = useState(false);
   const paginas = useMemo(() => paginar(prueba.preguntas), [prueba.preguntas]);
   const r = useMemo(() => calcularPrueba(prueba), [prueba]);
@@ -17,6 +17,7 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
   // Retroalimentación: las preguntas en que perdiste puntos (alternativas/V-F falladas o sin responder, desarrollos incompletos).
   const errores = useMemo(() => prueba.preguntas.map((p, k) => ({ p, n: k + 1, r: puntosDe(p, prueba.respuestas?.[p.id], prueba.evaluaciones?.[p.id]) })).filter((x) => x.r && x.r.puntos < x.r.max * 0.999), [prueba]);
   const [vista, setVista] = useState(errores.length ? 'errores' : 'completa');
+  const sinModelo = useMemo(() => prueba.preguntas.filter((q) => q.tipo === 'desarrollo' && !prueba.modelos?.[q.id]).length, [prueba]);
   const ir = (n) => { setI(Math.max(0, Math.min(paginas.length - 1, n))); scrollTo({ top: 0 }); };
   return (
     <div className="mesa">
@@ -48,7 +49,8 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
 
       <div className="tabs" role="tablist" aria-label="Cómo ver la corrección" style={{ margin: '18px auto 0', maxWidth: 794, width: 'fit-content' }}>
         <button role="tab" aria-selected={vista === 'errores'} className={vista === 'errores' ? 'on' : ''} onClick={() => { setVista('errores'); scrollTo({ top: 0 }); }}>Mis errores ({errores.length})</button>
-        <button role="tab" aria-selected={vista === 'completa'} className={vista === 'completa' ? 'on' : ''} onClick={() => { setVista('completa'); scrollTo({ top: 0 }); }}>Prueba corregida</button>
+        <button role="tab" aria-selected={vista === 'completa'} className={vista === 'completa' ? 'on' : ''} onClick={() => { setVista('completa'); setI(0); scrollTo({ top: 0 }); }}>Mi prueba corregida</button>
+        <button role="tab" aria-selected={vista === 'solucion'} className={vista === 'solucion' ? 'on' : ''} onClick={() => { setVista('solucion'); setI(0); scrollTo({ top: 0 }); }}>Respuestas de la IA</button>
       </div>
 
       {vista === 'errores' && (
@@ -65,9 +67,17 @@ export default function ResultadoPrueba({ prueba, corrigiendo, error, onCorregir
         </section>
       )}
 
-      {vista === 'completa' && <Hoja prueba={prueba} paginas={paginas} indice={i} modo="corregida" resumen={r} />}
+      {vista === 'solucion' && sinModelo > 0 && (
+        <div className="notice info" style={{ maxWidth: 794, margin: '14px auto 0' }}>
+          {redactando
+            ? `Redactando las respuestas completas de la IA… ${redactando.hechas} de ${redactando.total}. Mientras tanto se muestran sus ideas clave.`
+            : <>{sinModelo === 1 ? 'Falta redactar completa la respuesta de 1 pregunta de desarrollo.' : `Faltan por redactar completas las respuestas de ${sinModelo} preguntas de desarrollo.`} Por ahora se muestran sus ideas clave.{' '}
+              <button className="linkbtn" onClick={onRedactar}>Redactar respuestas completas</button></>}
+        </div>
+      )}
+      {(vista === 'completa' || vista === 'solucion') && <Hoja prueba={prueba} paginas={paginas} indice={i} modo={vista === 'solucion' ? 'solucion' : 'corregida'} resumen={r} />}
 
-      {vista === 'completa' && <nav className="mesa-nav" aria-label="Hojas corregidas">
+      {(vista === 'completa' || vista === 'solucion') && <nav className="mesa-nav" aria-label="Hojas corregidas">
         <button className="btn ghost" disabled={i === 0} onClick={() => ir(i - 1)}><Back /> Hoja anterior</button>
         <span className="sub">{i + 1} / {paginas.length}</span>
         <button className="btn" disabled={i === paginas.length - 1} onClick={() => ir(i + 1)}>Hoja siguiente <Chevron /></button>

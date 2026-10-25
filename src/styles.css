@@ -314,3 +314,10 @@ textarea.oral-ta:focus{border-color:var(--acc)}
 .voz-op.on{border-color:var(--acc);background:var(--acc-soft)}
 .voz-op input{accent-color:var(--acc);width:18px;height:18px}
 .voz-linea{font-size:13px;color:var(--mut);display:flex;gap:8px;align-items:center;flex-wrap:wrap}.voz-linea b{color:var(--ink)}
+/* Pauta de respuestas de la IA */
+.modelo{margin:10px 0 0 2.1em;padding:10px 14px;border-left:3px solid #0b7a53;background:#eef8f3;border-radius:0 8px 8px 0;color:#1d1a17}
+.modelo-t{font:800 12px 'Plus Jakarta Sans',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:#0b7a53;margin-bottom:4px}
+.modelo-txt{margin:0;font-size:15px;line-height:1.55;white-space:pre-wrap}
+.modelo-vacia{margin:0;font:italic 400 13.5px/1.5 'Source Serif 4',Georgia,serif;color:#6b665f}
+.modelo ul{margin:4px 0 0;padding-left:20px;font-size:14.5px;line-height:1.5}
+@media (max-width:520px){.modelo{margin-left:0}}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { elegirConceptos, nuevoOral, registrarRespuesta, aplicarEvaluacion, pasarConcepto, puntajeConcepto, resultadoOral, normalizarEvaluacion, repreguntasQuedan, conceptoActual, conceptosUsados, saludo, CIERRE } from '../src/lib/oral.js';
+import { elegirConceptos, nuevoOral, registrarRespuesta, aplicarEvaluacion, pasarConcepto, puntajeConcepto, resultadoOral, normalizarEvaluacion, esRepetida, mencionaMaterial, repreguntasQuedan, conceptoActual, conceptosUsados, saludo, CIERRE } from '../src/lib/oral.js';
 
 const docs = [
   { id: 'd1', nombre: 'Contratos', conceptos: [
@@ -109,4 +109,39 @@ test('normalizarEvaluacion acepta JSON con ruido y rechaza valoraciones inválid
 test('conceptosUsados junta los ids de interrogatorios previos', () => {
   const u = conceptosUsados([nuevo()]);
   assert.equal(u.size, 2);
+});
+
+test('el estilo dinámico permite hasta cuatro contrapreguntas por concepto', () => {
+  let o = nuevo('dinamico');
+  assert.equal(repreguntasQuedan(o), 4);
+  for (let i = 0; i < 4; i++) {
+    o = aplicarEvaluacion(registrarRespuesta(o, 'respuesta con varias palabras'), ev('parcial', { repregunta: `Contrapregunta ${i + 1}?` }));
+    assert.equal(o.actual, 0);
+  }
+  assert.equal(repreguntasQuedan(o), 0);
+  o = aplicarEvaluacion(registrarRespuesta(o, 'otra respuesta bastante larga'), ev('correcta', { repregunta: 'No debería preguntar más?' }));
+  assert.equal(o.actual, 1); // se acabaron las contrapreguntas: pasa al siguiente tema
+});
+
+test('con varias contrapreguntas cuenta más el promedio de lo que vino después de la primera', () => {
+  const t = (...vals) => ({ turnos: vals.map((v) => ({ rol: 'alumno', val: v })) });
+  assert.equal(puntajeConcepto(t('correcta')), 1);
+  assert.equal(puntajeConcepto(t('parcial', 'correcta')), 0.4 * 0.5 + 0.6 * 1);
+  // primera mala, luego se recupera: 0.3·0 + 0.7·promedio(0.5, 1, 1)
+  assert.ok(Math.abs(puntajeConcepto(t('incorrecta', 'parcial', 'correcta', 'correcta')) - 0.7 * (2.5 / 3)) < 1e-9);
+});
+
+test('una sola contrapregunta por turno y se detectan las repetidas', () => {
+  const r = normalizarEvaluacion('{"valoracion":"parcial","reaccion":"Mm.","repregunta":"¿Y si no paga? ¿Qué puede hacer el vendedor? ¿Y el juez?","observacion":""}');
+  assert.equal(r.repregunta, '¿Y si no paga?');
+  const previas = ['¿Y si el mandatario realiza acciones que no estaban en el mandato original? ¿Cómo se maneja eso?'];
+  assert.equal(esRepetida('¿Y si el mandatario realiza acciones que no estaban en el mandato?', previas), true);
+  assert.equal(esRepetida('¿Qué diferencia hay entre mandato y arrendamiento de servicios?', previas), false);
+  assert.equal(esRepetida('¿Por qué?', previas), false);
+});
+
+test('el profesor no delata que lee un material', () => {
+  assert.equal(mencionaMaterial('¿Cómo se relaciona esto con la definición del material?'), true);
+  assert.equal(mencionaMaterial('Según el texto, ¿qué es la compraventa?'), true);
+  assert.equal(mencionaMaterial('¿Qué obligaciones tiene el mandatario?'), false);
 });

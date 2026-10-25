@@ -9,7 +9,7 @@ import { formatoNota } from '../lib/grade.js';
 export default function OralTab({ ramos, docs, sel, orales, error, onCrear, onAbrir, onBorrar }) {
   const [origen, setOrigen] = useState(sel.docId ? 'd:' + sel.docId : sel.ramoId ? 'r:' + sel.ramoId : 'todo');
   const [n, setN] = useState(CONCEPTOS.defecto);
-  const [estilo, setEstilo] = useState('riguroso');
+  const [estilo, setEstilo] = useState('dinamico');
   const [borrar, setBorrar] = useState(null);
   const { docsOrigen, nombre } = useMemo(() => {
     if (origen.startsWith('d:')) { const d = docs.find((x) => x.id === origen.slice(2)); return { docsOrigen: d ? [d] : [], nombre: d?.nombre || '' }; }

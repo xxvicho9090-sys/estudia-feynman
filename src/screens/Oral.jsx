@@ -11,6 +11,7 @@ import { evaluarRespuestaOral } from '../lib/oralIA.js';
 
 const palabras = (t) => (t.trim() ? t.trim().split(/\s+/).length : 0);
 const SILENCIO_MS = 2800; // en manos libres: tras este silencio se entrega la respuesta
+const SILENCIO_DINAMICO_MS = 1900; // en el estilo dinámico el intercambio es más ágil
 
 // Sesión de interrogatorio: el profesor pregunta (en texto y, si quieres, en voz), tú respondes hablando o escribiendo.
 export default function Oral({ oral, onActualizar, onBack, onResultado }) {
@@ -75,7 +76,7 @@ export default function Oral({ oral, onActualizar, onBack, onResultado }) {
       (t) => {
         setTexto(base.current + t);
         clearTimeout(silencio.current);
-        if (ultimo.current.manos) silencio.current = setTimeout(() => entregar(base.current + t), SILENCIO_MS);
+        if (ultimo.current.manos) silencio.current = setTimeout(() => entregar(base.current + t), ultimo.current.oral.estilo === 'dinamico' ? SILENCIO_DINAMICO_MS : SILENCIO_MS);
       },
       () => setOyendo(false),
       (m) => { setError(m); setOyendo(false); },

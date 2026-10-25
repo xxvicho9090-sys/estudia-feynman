@@ -6,6 +6,7 @@ import { nuevoId } from './concepts.js';
 
 export const ESTILOS = {
   cordial: { nombre: 'Cordial', maxRep: 1, desc: 'Repregunta una vez si algo queda incompleto.' },
+  dinamico: { nombre: 'Dinámico', maxRep: 4, desc: 'Una conversación ágil: el profesor te hace contrapreguntas cortas (casos, «¿y si…?», «¿por qué?», contradicciones) hasta quedar conforme.' },
   riguroso: { nombre: 'Riguroso', maxRep: 2, desc: 'Hasta dos repreguntas y profundiza aunque respondas bien, como en una interrogación de verdad.' },
 };
 export const CONCEPTOS = { min: 2, max: 10, defecto: 5 };
@@ -70,14 +71,33 @@ export function normalizarEvaluacion(crudo) {
   const val = VALORACIONES.includes(o?.valoracion) ? o.valoracion : null;
   if (!val) throw new Error('El profesor no entregó una evaluación válida');
   const t = (x, max) => String(x ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
-  return { valoracion: val, reaccion: t(o.reaccion, 260), repregunta: t(o.repregunta, 260), observacion: t(o.observacion, 180) };
+  return { valoracion: val, reaccion: t(o.reaccion, 260), repregunta: soloUnaPregunta(t(o.repregunta, 260)), observacion: t(o.observacion, 180) };
 }
+
+// El profesor hace UNA contrapregunta por turno (los modelos chicos a veces encadenan dos o tres).
+export function soloUnaPregunta(texto) {
+  const i = texto.indexOf('?');
+  return i >= 0 ? texto.slice(0, i + 1) : texto;
+}
+const palabrasClave = (t) => new Set(String(t).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter((w) => w.length > 3));
+// ¿La contrapregunta nueva repite (o reformula casi igual) una que el profesor ya hizo?
+export function esRepetida(nueva, previas) {
+  const a = palabrasClave(nueva);
+  if (a.size < 3) return false;
+  return previas.some((p) => { const b = palabrasClave(p); let comunes = 0; for (const w of a) if (b.has(w)) comunes += 1; return comunes / a.size >= 0.7; });
+}
+
+// El profesor no debe delatar que lee un material («según el material», «el texto»…).
+export const mencionaMaterial = (t) => /\b(el|del|al|este|ese) (material|texto|apunte|pdf)\b/i.test(t);
 
 export function puntajeConcepto(c) {
   const vals = c.turnos.filter((t) => t.rol === 'alumno' && t.val).map((t) => PUNTOS[t.val]);
   if (!vals.length) return 0;
   if (vals.length === 1) return vals[0];
-  return 0.4 * vals[0] + 0.6 * vals[vals.length - 1]; // pesa más cómo terminas que cómo empiezas: la repregunta es para rescatar
+  // Pesa más cómo terminas que cómo empiezas: la repregunta es para rescatar. Con varias contrapreguntas cuenta el promedio de lo que vino después.
+  if (vals.length === 2) return 0.4 * vals[0] + 0.6 * vals[1];
+  const resto = vals.slice(1);
+  return 0.3 * vals[0] + 0.7 * (resto.reduce((s, v) => s + v, 0) / resto.length);
 }
 
 export function resultadoOral(oral) {

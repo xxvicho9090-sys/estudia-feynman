@@ -76,7 +76,20 @@ export function detenerDescarga() {
 // Misma forma que las otras IAs: recibe mensajes y devuelve texto.
 export const calentarLocal = () => prepararLocal();
 
+// Si la tarjeta gráfica se queda sin memoria (o el navegador la reinicia), WebLLM descarga el modelo solo y TODAS las consultas siguientes
+// fallan con «Model not loaded». Se detecta y se vuelve a cargar el motor desde lo ya descargado (sin bajar nada de nuevo).
+export const modeloPerdido = (e) => /not loaded|ModelNotLoaded|device.{0,12}lost|DeviceLost|out of memory|OutOfMemory/i.test(String(e?.message || e));
+export function reiniciarMotor() { try { worker?.terminate(); } catch { /* ya detenido */ } worker = null; motor = null; cargando = null; }
+
 export async function chatLocal(messages, signal, esquema, rapido) {
+  try { return await chatLocalUnaVez(messages, signal, esquema, rapido); } catch (e) {
+    if (e?.name === 'AbortError' || signal?.aborted || !modeloPerdido(e)) throw e;
+    reiniciarMotor();
+    return chatLocalUnaVez(messages, signal, esquema, rapido); // segundo intento con el motor recién cargado
+  }
+}
+
+async function chatLocalUnaVez(messages, signal, esquema, rapido) {
   const m = await prepararLocal();
   const parar = () => m.interruptGenerate?.();
   signal?.addEventListener('abort', parar, { once: true });

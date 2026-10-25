@@ -56,5 +56,35 @@ export function extraerJson(raw) {
   const a = s.indexOf('{');
   const b = s.lastIndexOf('}');
   if (a < 0 || b <= a) throw new Error('Respuesta sin JSON');
-  return JSON.parse(s.slice(a, b + 1));
+  try { return JSON.parse(s.slice(a, b + 1)); } catch (e) {
+    const rescatado = repararJson(s.slice(a));
+    if (rescatado) return rescatado;
+    throw e;
+  }
+}
+
+// Cierra las llaves y corchetes que faltan (ignorando lo que va entre comillas).
+function cierres(s) {
+  const pila = [];
+  let enTexto = false, escape = false;
+  for (const ch of s) {
+    if (enTexto) { if (escape) escape = false; else if (ch === '\\') escape = true; else if (ch === '"') enTexto = false; continue; }
+    if (ch === '"') enTexto = true;
+    else if (ch === '{' || ch === '[') pila.push(ch);
+    else if (ch === '}' || ch === ']') pila.pop();
+  }
+  return (enTexto ? '"' : '') + pila.reverse().map((c) => (c === '{' ? '}' : ']')).join('');
+}
+
+// Las IAs chicas a veces se cortan a la mitad (o se enredan al final): se rescata lo que sí quedó completo,
+// por ejemplo las primeras preguntas de una lista, cortando en el último objeto cerrado que deja un JSON válido.
+export function repararJson(s) {
+  const t = String(s ?? '');
+  for (let i = t.length - 1, intentos = 0; i > 0 && intentos < 400; i--) {
+    if (t[i] !== '}') continue;
+    intentos += 1;
+    const cand = t.slice(0, i + 1);
+    try { return JSON.parse(cand + cierres(cand)); } catch { /* se prueba con el cierre anterior */ }
+  }
+  return null;
 }

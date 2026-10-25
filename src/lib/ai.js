@@ -2,7 +2,7 @@
 // si uno llega a su límite (o falla), la app usa el siguiente que tengas disponible.
 // En la nube (gratis): Groq, Gemini, Cerebras, Mistral, OpenRouter. Sin internet: Ollama (tu computador) y la IA dentro de la app.
 // Todos los datos (claves, modelos) quedan solo en este dispositivo.
-import { chatLocal, localListo, calentarLocal } from './local.js';
+import { chatLocal, localListo, calentarLocal, modeloPerdido } from './local.js';
 import { ESQ_PRUEBA } from './esquemas.js';
 
 export class AiError extends Error {
@@ -58,6 +58,8 @@ export const setLocalesPrimero = (v) => ls.set('feynman.localesPrimero', v ? '1'
 export const configurado = (p) => (p.id === 'ollama' ? det.ollama.ok : p.id === 'local' ? localListo() : !!getClave(p.id));
 export const hayIA = () => PROVEEDORES.some(configurado);
 export const proveedoresConfigurados = () => PROVEEDORES.filter(configurado);
+// ¿Solo hay IAs que corren en el dispositivo (Ollama o la de la app)? Esas se cortan o se enredan con pedidos largos: se les piden pocas preguntas por vez.
+export const soloLocal = () => { const l = proveedoresConfigurados(); return l.length > 0 && l.every((p) => p.local); };
 
 // ---- Detección automática de Ollama ----
 const det = { ollama: { ok: false, modelo: '', modelos: [], hasta: 0 } };
@@ -160,6 +162,7 @@ async function consultar(p, messages, signal, esquema, rapido) {
   if (p.tipo === 'webllm') {
     try { return await chatLocal(paraLocal(p, messages), signal, esquema, rapido); } catch (e) {
       if (e?.name === 'AbortError') throw e;
+      if (modeloPerdido(e)) throw new AiError('http', 'La memoria gráfica de este dispositivo no alcanzó para la IA offline (se reinició sola). Cierra otras apps e inténtalo de nuevo, o conecta una IA gratis (Groq o Gemini) en Ajustes.');
       throw new AiError('http', `La IA dentro de la app falló: ${String(e?.message || e).slice(0, 160)}`);
     }
   }
